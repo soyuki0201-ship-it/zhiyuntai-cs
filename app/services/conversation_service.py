@@ -31,18 +31,19 @@ def process_unified_message(message: UnifiedMessage):
             user_id=message.user_id, user_name=message.user_name,
             group_id=message.group_id, group_name=message.group_name,
             platform=message.platform,
+            platform_config_id=message.platform_config_id,
         )
         if HandoffService.is_handed_over(message.user_id):
             HandoffService.update_last_active(message.user_id)
-            _save_message(conversation.id, "user", message.content, message.msg_type, message.platform)
+            _save_message(conversation.id, "user", message.content, message.msg_type, message.platform, message.image_path)
             return
-        _save_message(conversation.id, "user", message.content, message.msg_type, message.platform)
+        _save_message(conversation.id, "user", message.content, message.msg_type, message.platform, message.image_path)
         _handle_ai_response(conversation, message)
     except Exception as e:
         logger.error(f"处理消息异常: {e}", exc_info=True)
 
 
-def _get_or_create_conversation(user_id: str, user_name: str, group_id: str | None, group_name: str | None, platform: str) -> Conversation:
+def _get_or_create_conversation(user_id: str, user_name: str, group_id: str | None, group_name: str | None, platform: str, platform_config_id: int | None = None) -> Conversation:
     if group_id:
         conv = Conversation.query.filter_by(group_id=group_id, user_id=user_id, status="active").first()
     else:
@@ -52,10 +53,14 @@ def _get_or_create_conversation(user_id: str, user_name: str, group_id: str | No
             conv.user_name = user_name
         if group_name:
             conv.group_name = group_name
+        if platform_config_id is not None:
+            conv.platform_config_id = platform_config_id
         conv.updated_at = datetime.utcnow()
         db.session.commit()
         return conv
-    conv = Conversation(channel=platform, user_id=user_id, user_name=user_name, group_id=group_id, group_name=group_name, status="active")
+    conv = Conversation(channel=platform, user_id=user_id, user_name=user_name,
+                        group_id=group_id, group_name=group_name, status="active",
+                        platform_config_id=platform_config_id)
     db.session.add(conv)
     db.session.commit()
     return conv
@@ -63,11 +68,16 @@ def _get_or_create_conversation(user_id: str, user_name: str, group_id: str | No
 
 def _handle_ai_response(conversation: Conversation, message: UnifiedMessage):
     try:
-        knowledge_chunks = KnowledgeService.search(message.content)
+        # 简短输入（<5字）跳过 RAG 检索
+        content = message.content.strip()
+        if len(content) >= 5:
+            knowledge_chunks = KnowledgeService.search(content)
+        else:
+            knowledge_chunks = []
         history = get_conversation_history(conversation.id)
         handoff = HandoffService.get_handoff(message.user_id)
         is_waiting = handoff is not None
-        messages = PromptBuilder.build_messages(user_input=message.content, knowledge_chunks=knowledge_chunks, conversation_history=history, is_handoff_waiting=is_waiting)
+        messages = PromptBuilder.build_messages(user_input=content, knowledge_chunks=knowledge_chunks, conversation_history=history, is_handoff_waiting=is_waiting)
         ai_service = _get_ai_service()
         reply = ai_service.chat(messages)
         should_handoff = PromptBuilder.check_should_handoff(reply)
@@ -90,13 +100,15 @@ def _send_reply(original_message: UnifiedMessage, content: str):
         platform.send_message(reply)
 
 
-def _save_message(conversation_id: int, role: str, content: str, msg_type: str, platform: str):
-    msg = Message(conversation_id=conversation_id, role=role, content=content, msg_type=msg_type, channel=platform)
+def _save_message(conversation_id: int, role: str, content: str, msg_type: str, platform: str, image_path: str = None):
+    msg = Message(conversation_id=conversation_id, role=role, content=content, msg_type=msg_type, channel=platform, image_path=image_path)
     db.session.add(msg)
     db.session.commit()
 
 
-def get_conversation_history(conversation_id: int, max_rounds: int = 10) -> list[dict]:
+def get_conversation_history(conversation_id: int, max_rounds: int = None) -> list[dict]:
+    if max_rounds is None:
+        max_rounds = current_app.config.get("MAX_HISTORY_ROUNDS", 10)
     msgs = Message.query.filter(
         Message.conversation_id == conversation_id,
         Message.role.in_(["user", "assistant"]),

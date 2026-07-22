@@ -20,8 +20,11 @@ def _get_encryption_key() -> bytes:
     """从 SECRET_KEY 派生加密密钥
 
     SECRET_KEY 来自环境变量，部署时配置。
+    必须确保 __init__.py 中的启动检查先于首次调用。
     """
-    secret = os.getenv("SECRET_KEY", "change-this-in-production")
+    secret = os.getenv("SECRET_KEY", "")
+    if not secret:
+        raise RuntimeError("SECRET_KEY 未配置，无法进行加密操作")
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,

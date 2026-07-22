@@ -1,42 +1,10 @@
-<!DOCTYPE html>
-<html lang="zh">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AI配置 - 智云台AI客服</title>
+{% extends "admin/base.html" %}
+{% block title %}AI配置 - 智云台AI客服{% endblock %}
+{% block page_title %}🧠 AI 配置{% endblock %}
+{% block head_extra %}
 <script src="https://unpkg.com/htmx.org@1.9.12"></script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f5f6fa;color:#333}
-.sidebar{position:fixed;left:0;top:0;bottom:0;width:200px;background:#1d1f25;color:#fff;padding:20px 0}
-.sidebar h2{padding:0 20px 20px;font-size:16px;border-bottom:1px solid #333}
-.sidebar a{display:block;padding:12px 20px;color:#999;text-decoration:none;font-size:14px}
-.sidebar a:hover,.sidebar a.active{color:#fff;background:#2a2d35}
-.main{margin-left:200px;padding:20px 30px}
 h1{font-size:22px;margin-bottom:20px}
-.card{background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin-bottom:20px;overflow:hidden}
-.card-header{padding:16px 20px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center}
-.card-header h3{font-size:15px;font-weight:600}
-.card-body{padding:20px}
-.form-group{margin-bottom:16px}
-.form-group label{display:block;font-size:13px;color:#555;margin-bottom:4px}
-.form-group input,.form-group select,.form-group textarea{width:100%;max-width:600px;padding:8px 12px;border:1px solid #ddd;border-radius:4px;font-size:14px}
-.form-group textarea{min-height:100px}
-.form-group .hint{font-size:12px;color:#999;margin-top:2px}
-.form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-.btn{display:inline-block;padding:6px 14px;border:none;border-radius:4px;cursor:pointer;font-size:13px;text-decoration:none}
-.btn-primary{background:#518dfe;color:#fff}
-.btn-primary:hover{background:#3a7af5}
-.btn-danger{background:#ef5350;color:#fff}
-.btn-outline{background:transparent;border:1px solid #ddd;color:#666}
-.btn-outline:hover{border-color:#518dfe;color:#518dfe}
-.btn-sm{padding:4px 10px;font-size:12px}
-.empty{text-align:center;padding:60px;color:#999}
-.tag{display:inline-block;padding:2px 8px;border-radius:3px;font-size:12px}
-.tag-green{background:#e8f5e9;color:#2e7d32}
-.tag-orange{background:#fff3e0;color:#e65100}
-.tag-gray{background:#f5f5f5;color:#999}
-.tag-blue{background:#e3f2fd;color:#1565c0}
 .model-card{border:1px solid #e8e8e8;border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px}
 .model-card.primary{border-color:#b7eb8f;background:#f6ffed}
 .model-card .info{flex:1;min-width:120px}
@@ -48,20 +16,8 @@ h1{font-size:22px;margin-bottom:20px}
 .add-model-card span{color:#518dfe;font-size:14px}
 .alert-info{padding:12px 16px;background:#e3f2fd;border:1px solid #90caf9;border-radius:6px;font-size:13px;color:#1565c0;margin-top:12px}
 </style>
-</head>
-<body>
-<div class="sidebar">
-<h2>智云台AI客服</h2>
-<a href="{{ url_for('admin.conversation_list') }}">全部对话</a>
-<a href="{{ url_for('admin.pending_list') }}">待处理</a>
-<a href="{{ url_for('admin.active_list') }}">处理中</a>
-<a href="{{ url_for('admin.knowledge_list') }}">知识库</a>
-<a href="{{ url_for('admin_config.platform_list') }}">平台配置</a>
-<a href="{{ url_for('ai_config.ai_config_page') }}" class="active">AI配置</a>
-<a href="/admin/logout" style="position:absolute;bottom:20px;left:20px;color:#666;font-size:13px;">退出登录</a>
-</div>
-<div class="main">
-<h1>🧠 AI 配置</h1>
+{% endblock %}
+{% block content %}
 
 <!-- 大模型配置 -->
 <div class="card">
@@ -89,7 +45,7 @@ h1{font-size:22px;margin-bottom:20px}
     </div>
     {% endfor %}
 {% else %}
-    <div class="empty">暂未配置 AI 模型</div>
+    <div class="empty-state">暂未配置 AI 模型</div>
 {% endif %}
     <div class="add-model-card" onclick="showAddModal()">
         <span>＋ 添加更多模型（支持 DeepSeek、OpenAI、通义千问、Kimi 等）</span>
@@ -138,8 +94,6 @@ h1{font-size:22px;margin-bottom:20px}
 </div>
 </div>
 
-</div>
-
 <!-- Modal: 添加模型 -->
 <div id="add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:center;justify-content:center;padding:20px">
 <div style="background:#fff;border-radius:12px;width:560px;max-width:100%;max-height:80vh;overflow-y:auto;margin:auto;margin-top:10vh">
@@ -173,16 +127,19 @@ h1{font-size:22px;margin-bottom:20px}
 </div>
 </div></div>
 
-<!-- Toast -->
-<div id="toast" style="display:none;position:fixed;bottom:30px;right:30px;background:#323232;color:#fff;padding:12px 24px;border-radius:8px;font-size:14px;z-index:9999"></div>
-
 <script>
 function showToast(msg, isError) {
     var t = document.getElementById('toast');
+    if (!t) return;
     t.style.background = isError ? '#d32f2f' : '#323232';
     t.textContent = msg;
     t.style.display = 'block';
     setTimeout(function(){ t.style.display = 'none'; }, 3000);
+}
+
+function getCsrfToken() {
+    var el = document.querySelector('input[name="csrf_token"]');
+    return el ? el.value : '';
 }
 
 function showAddModal() { document.getElementById('add-modal').style.display = 'flex'; }
@@ -200,14 +157,13 @@ function submitAdd() {
 }
 
 function editModel(id) {
-    // Since we pass encrypted keys, we open edit inline or redirect
     showToast('编辑功能请直接在列表中操作，先删除再添加');
 }
 
 function deleteModel(id) {
     if (!confirm('确认删除该模型？')) return;
     var f = new FormData();
-    f.append('csrf_token', document.querySelector('[name=csrf_token]').value);
+    f.append('csrf_token', getCsrfToken());
     fetch('/admin/ai-config/providers/' + id + '/delete', { method: 'POST', body: f })
     .then(function(r) { return r.json(); })
     .then(function(d) { showToast(d.message); location.reload(); });
@@ -215,6 +171,7 @@ function deleteModel(id) {
 
 function testModel(id) {
     var f = new FormData();
+    f.append('csrf_token', getCsrfToken());
     fetch('/admin/ai-config/providers/' + id + '/test', { method: 'POST', body: f })
     .then(function(r) { return r.json(); })
     .then(function(d) { showToast(d.message, !d.success); });
@@ -228,8 +185,10 @@ function testAllModels() {
     {% endfor %}
     if (ids.length === 0) { showToast('暂无模型可测试', true); return; }
     var pending = ids.length;
+    var token = getCsrfToken();
     ids.forEach(function(id) {
         var f = new FormData();
+        f.append('csrf_token', token);
         fetch('/admin/ai-config/providers/' + id + '/test', { method: 'POST', body: f })
         .then(function(r) { return r.json(); })
         .then(function(d) {
@@ -241,7 +200,7 @@ function testAllModels() {
 
 function setPrimary(id) {
     var f = new FormData();
-    f.append('csrf_token', document.querySelector('[name=csrf_token]').value);
+    f.append('csrf_token', getCsrfToken());
     fetch('/admin/ai-config/providers/' + id + '/set-primary', { method: 'POST', body: f })
     .then(function(r) { return r.json(); })
     .then(function(d) { showToast(d.message); location.reload(); });
@@ -261,7 +220,7 @@ function saveConfig() {
 
 function savePrompt() {
     var f = new FormData();
-    f.append('csrf_token', document.querySelector('[name=csrf_token]').value);
+    f.append('csrf_token', getCsrfToken());
     f.append('system_prompt', document.querySelector('[name=system_prompt]').value);
     fetch('/admin/ai-config/config', { method: 'POST', body: f })
     .then(function(r) { return r.json(); })
@@ -270,7 +229,7 @@ function savePrompt() {
 
 function saveRag() {
     var f = new FormData();
-    f.append('csrf_token', document.querySelector('[name=csrf_token]').value);
+    f.append('csrf_token', getCsrfToken());
     f.append('rag_top_k', document.getElementById('rag_top_k').value);
     f.append('rag_similarity_threshold', document.getElementById('rag_similarity_threshold').value);
     fetch('/admin/ai-config/config', { method: 'POST', body: f })
@@ -278,5 +237,5 @@ function saveRag() {
     .then(function(d) { showToast(d.message); });
 }
 </script>
-</body>
-</html>
+
+{% endblock %}

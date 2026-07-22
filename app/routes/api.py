@@ -50,7 +50,7 @@ def platform_callback(platform: str):
     # 异步处理消息（先返回200，再慢慢处理）
     thread = Thread(
         target=_handle_platform_message,
-        args=(platform_instance, request),
+        args=(platform_instance, request, platform_instance._config_id),
     )
     thread.daemon = True
     thread.start()
@@ -58,12 +58,13 @@ def platform_callback(platform: str):
     return Response("", mimetype="text/plain")
 
 
-def _handle_platform_message(platform, request):
+def _handle_platform_message(platform, request, platform_config_id=None):
     """异步处理平台消息"""
     try:
         with current_app.app_context():
             # 1. 解析为统一消息
             message = platform.parse_message(request)
+            message.platform_config_id = platform_config_id
 
             # 2. 交给业务层处理（业务层不感知平台）
             process_unified_message(message)

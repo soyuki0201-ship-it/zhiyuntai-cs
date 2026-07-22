@@ -110,6 +110,14 @@ class KnowledgeService:
         return search_knowledge(query, top_k=top_k)
 
     @staticmethod
+    def search_by_title(query: str) -> list:
+        """按标题搜索知识条目"""
+        if not query or not query.strip():
+            return Knowledge.query.order_by(Knowledge.updated_at.desc()).all()
+        pattern = f"%{query.strip()}%"
+        return Knowledge.query.filter(Knowledge.title.like(pattern)).order_by(Knowledge.updated_at.desc()).all()
+
+    @staticmethod
     def list_all(page: int = 1, per_page: int = 20) -> tuple:
         """获取知识列表（分页）
 

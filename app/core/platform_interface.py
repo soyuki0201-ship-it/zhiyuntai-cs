@@ -24,6 +24,8 @@ class UnifiedMessage:
     user_name: str = ""           # 发送者名称
     group_id: str | None = None   # 群ID（私聊为None）
     group_name: str | None = None # 群名称
+    platform_config_id: int | None = None  # 平台配置实例ID
+    image_path: str | None = None  # 图片消息本地缓存路径
     raw_data: dict = field(default_factory=dict)  # 原始数据
 
 
@@ -57,6 +59,21 @@ class PlatformInterface(ABC):
         """验证请求是否来自该平台（签名验证等）
 
         返回 True 表示请求合法，False 表示非法请求。
+        """
+        pass
+
+    @abstractmethod
+    def handle_verification(self, request: Any) -> str:
+        """处理平台回调 URL 验证（GET 请求）
+
+        各平台有各自的验证方式（签名、echo challenge 等）。
+        返回验证成功后的响应字符串。
+
+        Args:
+            request: Flask request 对象
+
+        Returns:
+            str: 验证成功后的响应内容
         """
         pass
 

@@ -1,123 +1,34 @@
-<!DOCTYPE html>
-<html lang="zh">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ '编辑配置' if config else '新增配置' }} - 智云台AI客服</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box;}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f5f6fa;color:#333;}
-.sidebar{position:fixed;left:0;top:0;bottom:0;width:200px;background:#1d1f25;color:#fff;padding:20px 0;}
-.sidebar h2{padding:0 20px 20px;font-size:16px;border-bottom:1px solid #333;}
-.sidebar a{display:block;padding:12px 20px;color:#999;text-decoration:none;font-size:14px;}
-.sidebar a:hover,.sidebar a.active{color:#fff;background:#2a2d35;}
-.main{margin-left:200px;padding:20px 30px;}
-h1{font-size:20px;margin-bottom:20px;}
-.form-group{margin-bottom:16px;}
-.form-group label{display:block;font-size:14px;color:#555;margin-bottom:4px;}
-.form-group input,.form-group select{width:100%;max-width:500px;padding:8px 12px;border:1px solid #ddd;border-radius:4px;font-size:14px;}
-.form-group .hint{font-size:12px;color:#999;margin-top:2px;}
-.btn{display:inline-block;padding:8px 18px;border:none;border-radius:4px;cursor:pointer;font-size:14px;text-decoration:none;}
-.btn-primary{background:#518dfe;color:#fff;}
-.btn-outline{background:#fff;border:1px solid #ddd;color:#666;margin-left:8px;}
-.back-link{display:inline-block;margin-bottom:16px;color:#518dfe;text-decoration:none;font-size:14px;}
-</style>
-<script>
-function onPlatformChange(select) {
-    var selected = select.value;
-    if (!selected) return;
-    fetch('/admin/platforms/schema/' + selected)
-        .then(function(r) { return r.json(); })
-        .then(function(schema) {
-            var container = document.getElementById('config-fields');
-            container.innerHTML = '';
-            schema.fields.forEach(function(field) {
-                var div = document.createElement('div');
-                div.className = 'form-group';
-                var label = document.createElement('label');
-                label.innerHTML = field.label + (field.required ? ' <span style="color:red">*</span>' : '');
-                var input = document.createElement('input');
-                input.type = field.type;
-                input.name = 'cfg_' + field.key;
-                if (field.required) input.required = true;
-                if (field.readonly) input.readOnly = true;
-                input.placeholder = field.label;
-                if (field.key === 'callback_url') {
-                    var hint = document.createElement('div');
-                    hint.className = 'hint';
-                    hint.textContent = '部署后自动生成';
-                    div.appendChild(hint);
-                }
-                div.appendChild(label);
-                div.appendChild(input);
-                container.appendChild(div);
-            });
-        });
-}
-</script>
-</head>
-<body>
-<div class="sidebar">
-<h2>智云台AI客服</h2>
-<a href="{{ url_for('admin.conversation_list') }}">全部对话</a>
-<a href="{{ url_for('admin.pending_list') }}">待处理</a>
-<a href="{{ url_for('admin.active_list') }}">处理中</a>
-<a href="{{ url_for('admin.knowledge_list') }}">知识库</a>
-<a href="{{ url_for('admin_config.platform_list') }}" class="active">平台配置</a>
-<a href="/admin/logout" style="position:absolute;bottom:20px;left:20px;color:#666;font-size:13px;">退出登录</a>
-</div>
-<div class="main">
-<a href="{{ url_for('admin_config.platform_list') }}" class="back-link">← 返回平台配置</a>
-<h1>{{ '编辑配置' if config else '新增配置' }}</h1>
+{% extends "admin/base.html" %}
+{% block page_title %}{{ '编辑配置' if config else '新增配置' }}{% endblock %}
+{% block content %}
+<a href="{{ url_for('admin_config.platform_list') }}" style="display:inline-block;margin-bottom:16px;color:#4361ee;text-decoration:none;font-size:14px">← 返回渠道管理</a>
+<h1 style="font-size:20px;margin-bottom:20px">{{ '编辑配置' if config else '新增配置' }}</h1>
+<div class="card"><div class="card-body">
 <form method="POST">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-{% if config %}
-    {# 编辑模式：平台类型只读 #}
-    <div class="form-group">
-        <label>平台类型</label>
-        <input type="text" value="{{ config.platform }}" readonly>
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  {% if config %}
+  <div class="form-group"><label>平台类型</label><input type="text" value="{{ config.platform }}" readonly></div>
+  {% else %}
+  <div class="form-group"><label>平台类型</label><select name="platform" required><option value="">请选择...</option>{% for a in available %}<option value="{{ a.type }}">{{ a.name }}</option>{% endfor %}</select></div>
+  {% endif %}
+  <div class="form-group"><label>配置名称</label><input type="text" name="name" value="{{ config.name if config else '' }}" required placeholder="例如：企业微信-生产环境"></div>
+  <div class="form-group"><label><input type="checkbox" name="enabled" value="1" {% if not config or config.enabled %}checked{% endif %}> 启用</label></div>
+  <div id="config-fields">
+  {% if schema and schema.fields %}
+    {% for field in schema.fields %}
+    <div class="form-group"><label>{{ field.label }}{% if field.required %}<span style="color:red">*</span>{% endif %}</label>
+      <input type="{{ field.type }}" name="cfg_{{ field.key }}" value="{{ config.get_config().get(field.key, '') if config else '' }}" {% if field.required %}required{% endif %} {% if field.readonly %}readonly{% endif %} placeholder="{{ field.label }}">
+      {% if field.key == 'callback_url' %}<div class="hint">部署后自动生成</div>{% endif %}
+      {% if field.key == 'group_robot_webhook' %}<div class="hint">可选，群聊场景需要</div>{% endif %}
     </div>
-{% else %}
-    {# 新增模式：选择平台类型 #}
-    <div class="form-group">
-        <label>平台类型</label>
-        <select name="platform" onchange="onPlatformChange(this)" required>
-            <option value="">请选择...</option>
-            {% for a in available %}
-            <option value="{{ a.type }}">{{ a.name }}</option>
-            {% endfor %}
-        </select>
-    </div>
-{% endif %}
-    <div class="form-group">
-        <label>配置名称</label>
-        <input type="text" name="name" value="{{ config.name if config else '' }}" required placeholder="例如：企业微信-生产环境">
-    </div>
-    <div class="form-group">
-        <label>
-            <input type="checkbox" name="enabled" value="1" {% if not config or config.enabled %}checked{% endif %}>
-            启用
-        </label>
-    </div>
-    {# 配置项：服务端预渲染（新增和编辑模式都可见），JS 负责切换平台类型时动态更新 #}
-    <div id="config-fields">
-    {% if schema and schema.fields %}
-        {% for field in schema.fields %}
-        <div class="form-group">
-            <label>{{ field.label }}{% if field.required %} <span style="color:red">*</span>{% endif %}</label>
-            <input type="{{ field.type }}" name="cfg_{{ field.key }}"
-                   value="{{ config.get_config().get(field.key, '') if config else '' }}"
-                   {% if field.required %}required{% endif %}
-                   {% if field.readonly %}readonly{% endif %}
-                   placeholder="{{ field.label }}">
-            {% if field.key == 'callback_url' %}
-            <div class="hint">部署后自动生成</div>
-            {% endif %}
-        </div>
-        {% endfor %}
-    {% endif %}
-    </div>
-    <button type="submit" class="btn btn-primary">保存</button>
+    {% endfor %}
+  {% endif %}
+  </div>
+  <div class="btn-group" style="margin-top:12px">
+    <button type="submit" class="btn btn-primary">💾 保存</button>
     <a href="{{ url_for('admin_config.platform_list') }}" class="btn btn-outline">取消</a>
+    {% if config %}<button type="button" class="btn btn-outline" onclick="fetch('{{ url_for('admin_config.platform_test', pid=config.id) }}',{method:'POST',headers:{'X-CSRFToken':document.querySelector('input[name=csrf_token]').value}}).then(r=>r.json()).then(d=>alert(d.message||'连接测试完成'))">📡 测试连接</button>{% endif %}
+  </div>
 </form>
-</div>
-</body>
-</html>
+</div></div>
+{% endblock %}

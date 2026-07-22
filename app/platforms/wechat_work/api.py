@@ -50,6 +50,16 @@ class WeChatWorkAPI:
             logger.error(f"发送消息失败: {data}")
         return data
 
+    def send_group_robot_message(self, webhook_url: str, content: str) -> bool:
+        """通过群机器人 Webhook 发送群聊消息"""
+        try:
+            payload = {"msgtype": "text", "text": {"content": content}}
+            resp = requests.post(webhook_url, json=payload, timeout=10)
+            return resp.ok
+        except Exception as e:
+            logger.error(f"企微群机器人发送失败: {e}")
+            return False
+
     def get_external_contact(self, user_id: str) -> dict | None:
         token = self.get_access_token()
         url = f"{self.BASE_URL}/externalcontact/get"

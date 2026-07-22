@@ -12,14 +12,12 @@ services:
       - MYSQL_USER=${MYSQL_USER}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD}
       - MYSQL_DATABASE=${MYSQL_DATABASE}
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - SECRET_KEY=${SECRET_KEY}
       - ADMIN_USERNAME=${ADMIN_USERNAME}
       - ADMIN_PASSWORD=${ADMIN_PASSWORD}
       - HF_ENDPOINT=${HF_ENDPOINT}
     volumes:
       - ./chroma_db:/app/chroma_db
-      - ./knowledge_base:/app/knowledge_base
       - ./image_cache:/app/image_cache
     ports:
       - "127.0.0.1:8000:8000"
@@ -51,7 +49,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - WATCHTOWER_CLEANUP=true
-      - WATCHTOWER_POLL_INTERVAL=60
+      - WATCHTOWER_POLL_INTERVAL=300
     command: zhiyuntai-app zhiyuntai-nginx
 
 volumes:

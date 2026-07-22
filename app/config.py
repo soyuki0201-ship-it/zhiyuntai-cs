@@ -23,10 +23,6 @@ class Config:
         f"?charset=utf8mb4"
     )
 
-    # DeepSeek
-    DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
-    DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
-
     # Embedding model
     EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "BAAI/bge-small-zh")
 

@@ -56,17 +56,13 @@ def get_enabled_platforms() -> list[PlatformInterface]:
     """从数据库获取所有已启用的平台实例
 
     从 platform_configs 表中读取 enabled=True 的配置，
-    然后实例化对应的平台模块。
+    然后实例化对应的平台模块。支持同一平台多配置实例。
     """
     from app.models.platform_config import PlatformConfig
 
     configs = PlatformConfig.query.filter_by(enabled=True).all()
     result = []
-    seen = set()
     for cfg in configs:
-        if cfg.platform in seen:
-            continue
-        seen.add(cfg.platform)
         platform = get_platform(cfg.platform)
         if platform:
             # 用数据库中的配置更新平台实例

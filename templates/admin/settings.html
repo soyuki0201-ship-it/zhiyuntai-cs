@@ -1,0 +1,33 @@
+{% extends "admin/base.html" %}
+{% block page_title %}系统设置{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header"><h3>👤 管理员账号</h3></div>
+  <div class="card-body">
+    <div class="form-row">
+      <div class="form-group"><label>用户名</label><input type="text" value="{{ admin_username }}" readonly></div>
+      <div class="form-group"><label>密码</label><input type="password" value="········" readonly></div>
+    </div>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header"><h3>🗄️ 数据管理</h3></div>
+  <div class="card-body">
+    <div class="form-row">
+      <div class="form-group"><label>对话保留天数</label><input type="text" value="{{ conversation_ttl }}" readonly><div class="hint">超过此天数的对话自动清理</div></div>
+      <div class="form-group"><label>接管超时释放（分钟）</label><input type="text" value="{{ handoff_timeout }}" readonly><div class="hint">超时自动恢复 AI 回复</div></div>
+    </div>
+  </div>
+</div>
+<div class="card">
+  <div class="card-header"><h3>ℹ️ 系统信息</h3></div>
+  <div class="card-body">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:13px">
+      <div><span style="color:#999">版本</span><br>v1.0.0</div>
+      <div><span style="color:#999">数据库</span><br>MySQL 8.0</div>
+      <div><span style="color:#999">向量库</span><br>ChromaDB</div>
+      <div><span style="color:#999">部署方式</span><br>Docker</div>
+    </div>
+  </div>
+</div>
+{% endblock %}

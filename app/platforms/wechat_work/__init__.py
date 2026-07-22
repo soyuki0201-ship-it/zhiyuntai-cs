@@ -78,13 +78,14 @@ class WeChatWorkPlatform(PlatformInterface):
         group_id = msg_data.get("GroupId", "")
         msg_id = msg_data.get("MsgId", "")
         user_name = msg_data.get("FromUserName", "")
+        image_path = None
         if msg_type == "image":
-            content = self._process_image(msg_data)
+            content, image_path = self._process_image(msg_data)
         return UnifiedMessage(
             platform="wechat_work", msg_id=msg_id,
             msg_type="text" if msg_type == "image" else msg_type,
             content=content, user_id=user_id, user_name=user_name,
-            group_id=group_id if group_id else None, raw_data=msg_data,
+            group_id=group_id if group_id else None, image_path=image_path, raw_data=msg_data,
         )
 
     def send_message(self, reply: UnifiedReply) -> bool:
@@ -93,10 +94,7 @@ class WeChatWorkPlatform(PlatformInterface):
             if reply.group_id:
                 webhook_url = self._config.get("group_robot_webhook", "")
                 if webhook_url:
-                    import requests
-                    payload = {"msgtype": "text", "text": {"content": reply.content}}
-                    requests.post(webhook_url, json=payload, timeout=10)
-                    return True
+                    return api.send_group_robot_message(webhook_url, reply.content)
                 return False
             else:
                 result = api.send_text_message(reply.user_id, reply.content)
@@ -113,13 +111,13 @@ class WeChatWorkPlatform(PlatformInterface):
             logger.error(f"获取企业微信用户信息失败: {e}")
             return {}
 
-    def _process_image(self, msg_data: dict) -> str:
+    def _process_image(self, msg_data: dict) -> tuple[str, str | None]:
         import os
         import requests as http_req
         from app.utils.ocr import extract_text_from_image
         media_id = msg_data.get("MediaId", "")
         if not media_id:
-            return "[图片]（未能识别）"
+            return "[图片]（未能识别）", None
         try:
             api = self._get_api()
             token = api.get_access_token()
@@ -131,10 +129,11 @@ class WeChatWorkPlatform(PlatformInterface):
             with open(local_path, "wb") as f:
                 f.write(resp.content)
             text = extract_text_from_image(local_path)
-            return f"[图片内容] {text}" if text else "[图片]（未能识别图中文字）"
+            content = f"[图片内容] {text}" if text else "[图片]（未能识别图中文字）"
+            return content, local_path
         except Exception as e:
             logger.error(f"图片处理失败: {e}")
-            return "[图片]（处理失败）"
+            return "[图片]（处理失败）", None
 
     def get_config_schema(self) -> dict:
         return {

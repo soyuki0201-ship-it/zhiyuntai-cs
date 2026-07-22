@@ -58,7 +58,9 @@ class HandoffService:
 
     @staticmethod
     def check_and_release_timeout() -> int:
-        timeout = datetime.utcnow() - timedelta(minutes=HandoffService.TIMEOUT_MINUTES)
+        from flask import current_app
+        timeout_minutes = current_app.config.get("HANDOFF_TIMEOUT_MINUTES", 30)
+        timeout = datetime.utcnow() - timedelta(minutes=timeout_minutes)
         expired = Handoff.query.filter(Handoff.status == "active", Handoff.last_active_at < timeout).all()
         for handoff in expired:
             handoff.status = "resolved"

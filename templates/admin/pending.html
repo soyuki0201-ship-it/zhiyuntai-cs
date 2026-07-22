@@ -1,63 +1,49 @@
-<!DOCTYPE html>
-<html lang="zh">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>待处理 - 智云台AI客服</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box;}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f5f6fa;color:#333;}
-.sidebar{position:fixed;left:0;top:0;bottom:0;width:200px;background:#1d1f25;color:#fff;padding:20px 0;}
-.sidebar h2{padding:0 20px 20px;font-size:16px;border-bottom:1px solid #333;}
-.sidebar a{display:block;padding:12px 20px;color:#999;text-decoration:none;font-size:14px;}
-.sidebar a:hover,.sidebar a.active{color:#fff;background:#2a2d35;}
-.main{margin-left:200px;padding:20px 30px;}
-.header{margin-bottom:20px;}
-.header h1{font-size:22px;}
-table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);}
-th,td{padding:12px 14px;text-align:left;font-size:13px;border-bottom:1px solid #eee;}
-th{background:#f8f9fb;font-weight:600;color:#555;}
-.btn{display:inline-block;padding:4px 10px;border:none;border-radius:4px;cursor:pointer;font-size:12px;text-decoration:none;}
-.btn-primary{background:#518dfe;color:#fff;}
-.btn-primary:hover{background:#3a7af5;}
-.empty{text-align:center;padding:60px;color:#999;}
-</style>
-</head>
-<body>
-<div class="sidebar">
-<h2>智云台AI客服</h2>
-<a href="{{ url_for('admin.conversation_list') }}">全部对话</a>
-<a href="{{ url_for('admin.pending_list') }}" class="active">待处理</a>
-<a href="{{ url_for('admin.active_list') }}">处理中</a>
-<a href="{{ url_for('admin.knowledge_list') }}">知识库</a>
-<a href="/admin/logout" style="position:absolute;bottom:20px;left:20px;color:#666;font-size:13px;">退出登录</a>
+{% extends "admin/base.html" %}
+{% block page_title %}人工接管{% endblock %}
+{% block content %}
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+  <div class="stat-card"><div class="label" style="color:#ef5350">⏳ 待处理（未接管）</div><div class="value" style="color:#ef5350">{{ pending_count }}</div><div class="change">AI 无法回答，等待运营接管</div></div>
+  <div class="stat-card"><div class="label" style="color:#fa8c16">🔄 处理中（已接管）</div><div class="value" style="color:#fa8c16">{{ active_count }}</div><div class="change">运营正在回复客户</div></div>
 </div>
-<div class="main">
-<div class="header"><h1>待处理列表</h1></div>
+
+<div class="card" style="border-left:3px solid #ef5350"><div class="card-header"><h3>⏳ 待处理</h3></div>
 {% if conversations %}
-<table>
-<thead><tr><th>客户</th><th>来源</th><th>最后消息</th><th>时间</th><th>操作</th></tr></thead>
-<tbody>
-{% for conv in conversations %}
-<tr>
-<td>{{ conv.user_name[:20] }}{% if conv.user_name|length > 20 %}...{% endif %}<br><small>{{ conv.group_name or '' }}</small></td>
-<td>{% if conv.channel == 'wechat_work' %}企业微信{% else %}{{ conv.channel }}{% endif %}</td>
-<td>{{ conv.last_message[:50] }}{% if conv.last_message|length > 50 %}...{% endif %}</td>
-<td>{{ conv.last_time.strftime('%m-%d %H:%M') }}</td>
-<td>
-<form action="{{ url_for('admin.takeover') }}" method="POST" style="display:inline"
-      hx-post="{{ url_for('admin.takeover') }}" hx-target="#action-feedback" hx-swap="innerHTML">
-    <input type="hidden" name="user_id" value="{{ conv.user_id }}">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button type="submit" class="btn btn-primary">接管</button>
-</form>
-<a href="{{ url_for('admin.conversation_detail', conv_id=conv.id) }}" class="btn btn-primary">查看</a>
-</td>
-</tr>
-{% endfor %}
-</tbody></table>
-<div id="action-feedback"></div>
-{% else %}
-<div class="empty">暂无待处理的对话</div>
-{% endif %}
+<div class="table-wrap"><table>
+  <thead><tr><th>客户</th><th>来源</th><th>问题</th><th>时间</th><th>操作</th></tr></thead>
+  <tbody>
+  {% for conv in conversations %}
+    <tr><td>{{ conv.user_name[:20] }}</td><td><span class="tag tag-blue">{% if conv.channel == 'wechat_work' %}企微{% elif conv.channel == 'feishu' %}飞书{% else %}{{ conv.channel }}{% endif %}</span></td><td>{{ conv.last_message[:50] }}</td><td style="white-space:nowrap">{{ conv.last_time.strftime('%m-%d %H:%M') }}</td>
+    <td class="btn-group">
+      <form action="{{ url_for('admin.takeover') }}" method="POST" style="display:inline" hx-post="{{ url_for('admin.takeover') }}" hx-target="body" hx-swap="outerHTML">
+        <input type="hidden" name="user_id" value="{{ conv.user_id }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-primary btn-sm">✋ 接管</button>
+      </form>
+      <a href="{{ url_for('admin.conversation_detail', conv_id=conv.id) }}" class="btn btn-outline btn-sm">查看</a>
+    </td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}<div class="card-body"><div class="empty-state">暂无待处理的对话</div></div>{% endif %}
 </div>
-</body>
-</html>
+
+<div class="card" style="border-left:3px solid #fa8c16;margin-top:16px"><div class="card-header"><h3>🔄 处理中</h3></div>
+{% if handoffs %}
+<div class="table-wrap"><table>
+  <thead><tr><th>客户</th><th>来源</th><th>处理人</th><th>接管时长</th><th>操作</th></tr></thead>
+  <tbody>
+  {% for h in handoffs %}
+    <tr><td>{{ h.user_name or h.user_id[:20] }}</td><td><span class="tag tag-blue">{% if h.channel == 'wechat_work' %}企微{% elif h.channel == 'feishu' %}飞书{% else %}{{ h.channel }}{% endif %}</span></td><td>{{ h.handled_by or '未指定' }}</td><td>{{ h.taken_at.strftime('%H:%M') }}</td>
+    <td>
+      <form action="{{ url_for('admin.release') }}" method="POST" style="display:inline" hx-post="{{ url_for('admin.release') }}" hx-target="body" hx-swap="outerHTML" hx-confirm="确认释放该客户？">
+        <input type="hidden" name="user_id" value="{{ h.user_id }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-success btn-sm">✅ 释放</button>
+      </form>
+    </td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}<div class="card-body"><div class="empty-state">暂无处理中的对话</div></div>{% endif %}
+</div>
+{% endblock %}

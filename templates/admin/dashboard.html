@@ -1,0 +1,9 @@
+{% extends "admin/base.html" %}
+{% block page_title %}工作台{% endblock %}
+{% block content %}
+<div class="stats-row">
+  <div class="stat-card"><div class="label">今日咨询</div><div class="value">{{ today_count }}</div></div>
+  <div class="stat-card"><div class="label">AI 回复</div><div class="value">{{ ai_count }}</div></div>
+  <div class="stat-card"><div class="label">转人工</div><div class="value">{{ handoff_count }}</div></div>
+</div>
+{% endblock %}

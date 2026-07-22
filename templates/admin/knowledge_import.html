@@ -1,0 +1,67 @@
+{% extends "admin/base.html" %}
+{% block page_title %}批量导入知识{% endblock %}
+{% block content %}
+<a href="{{ url_for('admin.knowledge_list') }}" style="display:inline-block;margin-bottom:16px;color:#4361ee;text-decoration:none;font-size:14px">← 返回知识库</a>
+<h1 style="font-size:20px;margin-bottom:20px">📂 批量导入知识</h1>
+
+<div class="card"><div class="card-body">
+  <div style="display:flex;flex-direction:column;gap:16px">
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="width:28px;height:28px;background:#4361ee;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:600;flex-shrink:0">1</div>
+      <div><div style="font-weight:500">下载 CSV 模板</div><div style="font-size:12px;color:#999;margin-top:2px">表头包含：title（标题）/ content（内容）/ category（分类）/ tags（标签）</div></div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="width:28px;height:28px;background:#4361ee;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:600;flex-shrink:0">2</div>
+      <div><div style="font-weight:500">在 Excel / WPS 中按模板格式填写知识数据</div><div style="font-size:12px;color:#999;margin-top:2px">分类需填写以下之一：产品功能介绍、产品常见问题、产品使用教程、付费相关、故障处理、需求提出、其他</div></div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:flex-start">
+      <div style="width:28px;height:28px;background:#4361ee;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:600;flex-shrink:0">3</div>
+      <div><div style="font-weight:500">上传填写好的 CSV 文件</div><div style="font-size:12px;color:#999;margin-top:2px">支持 UTF-8 with BOM 编码，单次建议不超过 500 行</div></div>
+    </div>
+  </div>
+  <div id="dropZone" style="border:2px dashed #d9d9d9;border-radius:8px;padding:32px;text-align:center;margin-top:16px;cursor:pointer" onclick="document.getElementById('file-input').click()">
+    <div style="font-size:36px;color:#4361ee">📤</div>
+    <div style="font-weight:500;color:#4361ee;margin-top:8px" id="uploadLabel">点击或拖拽 CSV 文件到此处</div>
+    <div style="font-size:12px;color:#999;margin-top:4px">仅支持 .csv 格式</div>
+  </div>
+  <input type="file" id="file-input" accept=".csv" style="display:none" onchange="document.getElementById('uploadLabel').textContent='已选择：'+this.files[0].name">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div style="display:flex;gap:8px;margin-top:16px;align-items:center">
+    <a href="{{ url_for('admin.knowledge_import_template') }}" class="btn btn-outline">📥 下载模板</a>
+    <button class="btn btn-primary" id="btnImport" onclick="doImport()">📤 上传并导入</button>
+  </div>
+  <div id="result" style="display:none;margin-top:16px;padding:16px;border-radius:8px"></div>
+</div></div>
+
+<script>
+function doImport() {
+  var input = document.getElementById('file-input');
+  if (!input.files.length) { alert('请先选择 CSV 文件'); return; }
+  var fd = new FormData();
+  fd.append('file', input.files[0]);
+  fd.append('csrf_token', document.querySelector('input[name="csrf_token"]').value);
+  var btn = document.getElementById('btnImport');
+  btn.disabled = true; btn.textContent = '⏳ 导入中...';
+  document.getElementById('result').style.display = 'block';
+  document.getElementById('result').innerHTML = '<div style="text-align:center;padding:20px;color:#999">⏳ 正在导入，请稍候...</div>';
+  fetch('{{ url_for("admin.knowledge_import") }}', { method: 'POST', body: fd })
+  .then(function(r){return r.json()})
+  .then(function(d){
+    if(d.success){
+      var html = '<div style="font-size:15px;font-weight:600">成功导入 <span style="color:#52c41a">'+d.success_count+'</span> 条，失败 <span style="color:#ef5350">'+d.fail_count+'</span> 条</div>';
+      if(d.errors && d.errors.length){
+        html += '<div style="margin-top:8px;font-size:13px;color:#666"><ul>';
+        d.errors.forEach(function(e){html += '<li style="list-style:none;padding:2px 0">⚠ '+e+'</li>'});
+        html += '</ul></div>';
+      }
+      document.getElementById('result').className = 'card-body';
+      document.getElementById('result').innerHTML = html;
+    } else {
+      document.getElementById('result').innerHTML = '<div style="color:#ef5350">❌ '+(d.message||'导入失败')+'</div>';
+    }
+  }).catch(function(e){
+    document.getElementById('result').innerHTML = '<div style="color:#ef5350">❌ 网络错误：'+e.message+'</div>';
+  }).finally(function(){ btn.disabled = false; btn.textContent = '📤 上传并导入'; });
+}
+</script>
+{% endblock %}

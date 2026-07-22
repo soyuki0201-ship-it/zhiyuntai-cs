@@ -54,7 +54,9 @@ class PromptBuilder:
             from app.models.models import AIConfig
             config = AIConfig.query.first()
             if config and config.handoff_markers:
-                return [m.strip() for m in config.handoff_markers.split(",") if m.strip()]
+                markers = [m.strip() for m in config.handoff_markers.split(",") if m.strip()]
+                if markers:
+                    return markers
         except Exception:
             pass
         return cls.handoff_markers

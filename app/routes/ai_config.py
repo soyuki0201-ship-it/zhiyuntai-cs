@@ -9,8 +9,9 @@
 import json
 import logging
 from functools import wraps
-from flask import Blueprint, render_template, request, redirect, url_for, jsonify, session
+from flask import Blueprint, render_template, request, redirect, url_for, jsonify, session, current_app
 from app.models.models import db, AIProvider, AIConfig
+from app.models.platform_config import _encrypt_json, _decrypt_json
 from app.utils.csrf import generate_csrf_token, csrf_protected
 
 logger = logging.getLogger(__name__)
@@ -64,15 +65,18 @@ def ai_provider_add():
     is_primary = request.form.get("is_primary", "0") == "1"
     enabled = request.form.get("enabled", "1") == "1"
 
+    # 先校验必填字段，再操作数据库
     if not all([name, provider, model_name, api_url, api_key]):
         return jsonify({"success": False, "message": "请填写必填字段"}), 400
 
+    # 加密 API Key
+    encrypted_key = _encrypt_json({"key": api_key})
+
     if is_primary:
-        # 将其他模型的is_primary设为False
         AIProvider.query.filter_by(is_primary=True).update({"is_primary": False})
 
     p = AIProvider(name=name, provider=provider, model_name=model_name,
-                   api_url=api_url, api_key=api_key, is_primary=is_primary,
+                   api_url=api_url, api_key=encrypted_key, is_primary=is_primary,
                    enabled=enabled, sort_order=0 if is_primary else 99)
     db.session.add(p)
     db.session.commit()
@@ -90,7 +94,7 @@ def ai_provider_edit(pid):
     p.api_url = request.form.get("api_url", p.api_url)
     api_key = request.form.get("api_key", "")
     if api_key:
-        p.api_key = api_key
+        p.api_key = _encrypt_json({"key": api_key})
     p.enabled = request.form.get("enabled", "1") == "1"
 
     is_primary = request.form.get("is_primary", "0") == "1"
@@ -120,7 +124,9 @@ def ai_provider_test(pid):
     p = AIProvider.query.get_or_404(pid)
     try:
         from app.services.ai_service import test_provider_connection
-        result = test_provider_connection(p.api_url, p.api_key, p.model_name)
+        decrypted = _decrypt_json(p.api_key)
+        api_key = decrypted.get("key", "")
+        result = test_provider_connection(p.api_url, api_key, p.model_name)
         return jsonify(result)
     except Exception as e:
         return jsonify({"success": False, "message": str(e)})
@@ -148,12 +154,15 @@ def ai_system_config_save():
     if not config:
         config = _init_default_config()
 
-    config.ai_name = request.form.get("ai_name", "智云台助手")
+    system_prompt = request.form.get("system_prompt", "").strip()
+    handoff_markers = request.form.get("handoff_markers", "").strip()
+
+    config.ai_name = request.form.get("ai_name", "智云台助手").strip()
     config.temperature = float(request.form.get("temperature", 0.7))
     config.max_tokens = int(request.form.get("max_tokens", 2000))
     config.max_history_rounds = int(request.form.get("max_history_rounds", 10))
-    config.system_prompt = request.form.get("system_prompt", "")
-    config.handoff_markers = request.form.get("handoff_markers", "")
+    config.system_prompt = system_prompt
+    config.handoff_markers = handoff_markers
     config.rag_top_k = int(request.form.get("rag_top_k", 5))
     config.rag_similarity_threshold = float(request.form.get("rag_similarity_threshold", 0.6))
     db.session.commit()

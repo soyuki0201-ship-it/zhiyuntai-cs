@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}智云台AI客服{% endblock %}</title>
+{% block head_extra %}{% endblock %}
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;background:#f0f2f5;color:#1a1a2e;font-size:14px;line-height:1.5}
+.app{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:240px;background:#1a1a2e;color:#fff;flex-shrink:0;display:flex;flex-direction:column;height:100vh}
+.sidebar-brand{padding:20px 24px;border-bottom:1px solid rgba(255,255,255,0.08)}
+.sidebar-brand h1{font-size:16px;font-weight:600}
+.sidebar-brand .sub{font-size:11px;color:rgba(255,255,255,0.4);margin-top:2px}
+.sidebar-nav{flex:1;padding:12px 0;overflow-y:auto}
+.nav-item{display:flex;align-items:center;padding:10px 24px;color:rgba(255,255,255,0.55);cursor:pointer;font-size:14px;gap:10px;border-left:3px solid transparent;text-decoration:none}
+.nav-item:hover{color:#fff;background:rgba(255,255,255,0.05)}
+.nav-item.active{color:#fff;background:rgba(67,97,238,0.15);border-left-color:#4361ee}
+.nav-item .icon{font-size:18px;width:22px;text-align:center}
+.nav-item .badge{margin-left:auto;background:#ef5350;color:#fff;font-size:11px;padding:1px 7px;border-radius:10px}
+.nav-divider{padding:8px 24px 2px;font-size:11px;color:rgba(255,255,255,0.25);margin-top:8px}
+.sidebar-footer{padding:16px 24px;border-top:1px solid rgba(255,255,255,0.08);font-size:12px;color:rgba(255,255,255,0.3)}
+.main{flex:1;display:flex;flex-direction:column}
+.topbar{background:#fff;padding:0 32px;height:56px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #e8e8e8;flex-shrink:0}
+.topbar-left{display:flex;align-items:center;gap:16px}
+.topbar-title{font-size:16px;font-weight:600;color:#1a1a2e}
+.topbar-right{display:flex;align-items:center;gap:12px}
+.system-status{font-size:12px;color:#666;display:flex;align-items:center}
+.status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
+.status-dot.green{background:#52c41a}
+.content{flex:1;padding:24px 32px;overflow-y:auto}
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px}
+.stat-card{background:#fff;border-radius:10px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+.stat-card .label{font-size:13px;color:#666;margin-bottom:6px}
+.stat-card .value{font-size:28px;font-weight:700;color:#1a1a2e}
+.card{background:#fff;border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.04);margin-bottom:20px;overflow:hidden}
+.card-header{padding:16px 20px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.card-header h3{font-size:15px;font-weight:600}
+.card-body{padding:20px}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th,td{padding:12px 14px;text-align:left;font-size:13px;border-bottom:1px solid #f0f0f0}
+th{background:#fafafa;font-weight:600;color:#555;white-space:nowrap}
+tr:hover td{background:#fafbff}
+.tag{display:inline-block;padding:2px 10px;border-radius:4px;font-size:12px;font-weight:500}
+.tag-green{background:#f6ffed;color:#52c41a;border:1px solid #b7eb8f}
+.tag-blue{background:#e6f7ff;color:#1890ff;border:1px solid #91d5ff}
+.tag-orange{background:#fff7e6;color:#fa8c16;border:1px solid #ffd591}
+.tag-red{background:#fff2f0;color:#ef5350;border:1px solid #ffccc7}
+.tag-gray{background:#f5f5f5;color:#999;border:1px solid #d9d9d9}
+.tag-purple{background:#f9f0ff;color:#722ed1;border:1px solid #d3adf7}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 16px;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:500;transition:all 0.15s;text-decoration:none}
+.btn-primary{background:#4361ee;color:#fff}
+.btn-primary:hover{background:#3a56d4}
+.btn-danger{background:#ef5350;color:#fff}
+.btn-success{background:#52c41a;color:#fff}
+.btn-outline{background:#fff;color:#555;border:1px solid #d9d9d9;text-decoration:none}
+.btn-outline:hover{border-color:#4361ee;color:#4361ee}
+.btn-sm{padding:4px 10px;font-size:12px}
+.btn-group{display:flex;gap:8px;flex-wrap:wrap}
+.form-group{margin-bottom:18px}
+.form-group label{display:block;font-size:13px;font-weight:500;color:#444;margin-bottom:6px}
+.form-group .hint{font-size:12px;color:#999;margin-top:4px}
+input[type=text],input[type=password],input[type=url],select,textarea{width:100%;max-width:560px;padding:8px 12px;border:1px solid #d9d9d9;border-radius:6px;font-size:14px;color:#333;transition:border-color .2s;background:#fff}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#4361ee;box-shadow:0 0 0 2px rgba(67,97,238,.1)}
+textarea{min-height:120px;resize:vertical}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.tabs{display:flex;gap:0;border-bottom:2px solid #f0f0f0;margin-bottom:20px}
+.tab{padding:10px 20px;cursor:pointer;font-size:14px;color:#666;border-bottom:2px solid transparent;margin-bottom:-2px;transition:.15s;text-decoration:none}
+.tab:hover{color:#4361ee}
+.tab.active{color:#4361ee;border-bottom-color:#4361ee;font-weight:500}
+.status-indicator{display:flex;align-items:center;gap:8px;padding:12px 16px;border-radius:6px;font-size:13px}
+.status-indicator.good{background:#f6ffed;color:#52c41a;border:1px solid #b7eb8f}
+.status-indicator.warn{background:#fffbe6;color:#faad14;border:1px solid #ffe58f}
+.status-indicator.info{background:#e6f7ff;color:#1890ff;border:1px solid #91d5ff}
+.empty-state{text-align:center;padding:60px 20px;color:#999}
+.btn-logout{display:block;padding:12px 24px;color:rgba(255,255,255,0.4);text-decoration:none;font-size:13px;margin-top:auto}
+.btn-logout:hover{color:#fff;background:rgba(255,255,255,0.05)}
+@media(max-width:900px){
+  .sidebar{width:56px}
+  .sidebar-brand h1,.sidebar-brand .sub,.nav-item span,.nav-item .badge,.sidebar-footer,.nav-divider,.btn-logout span{display:none}
+  .nav-item{padding:12px;justify-content:center}
+  .content{padding:16px}
+  .form-row{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="sidebar">
+  <div class="sidebar-brand"><h1>🤖 智云台AI</h1><div class="sub">智能客服管理系统</div></div>
+  <nav class="sidebar-nav">
+    <a class="nav-item {% if request.endpoint == 'admin.conversation_list' %}active{% endif %}" href="{{ url_for('admin.conversation_list') }}"><span class="icon">📊</span><span>工作台</span></a>
+    <a class="nav-item {% if request.endpoint in ('admin.conversation_list','admin.conversation_detail') %}active{% endif %}" href="{{ url_for('admin.conversation_list') }}"><span class="icon">💬</span><span>会话管理</span>{% if pending_count > 0 %}<span class="badge">{{ pending_count }}</span>{% endif %}</a>
+    <a class="nav-item {% if request.endpoint in ('admin.pending_list',) %}active{% endif %}" href="{{ url_for('admin.pending_list') }}"><span class="icon">🔄</span><span>人工接管</span>{% if pending_count > 0 %}<span class="badge">{{ pending_count }}</span>{% endif %}</a>
+    <a class="nav-item {% if request.endpoint in ('admin.knowledge_list','admin.knowledge_add','admin.knowledge_edit','admin.knowledge_import') %}active{% endif %}" href="{{ url_for('admin.knowledge_list') }}"><span class="icon">📚</span><span>知识库</span></a>
+    <div class="nav-divider">系统配置</div>
+    <a class="nav-item {% if request.endpoint in ('admin_config.platform_list','admin_config.platform_add','admin_config.platform_edit') %}active{% endif %}" href="{{ url_for('admin_config.platform_list') }}"><span class="icon">🔌</span><span>渠道管理</span></a>
+    <a class="nav-item {% if request.endpoint == 'ai_config.ai_config_page' %}active{% endif %}" href="{{ url_for('ai_config.ai_config_page') }}"><span class="icon">🧠</span><span>AI 配置</span></a>
+    <a class="nav-item" href="{{ url_for('admin.settings_page') }}"><span class="icon">⚙️</span><span>系统设置</span></a>
+  </nav>
+  <div class="sidebar-footer">v1.0</div>
+  <a class="btn-logout" href="{{ url_for('admin.logout') }}"><span>🚪 退出登录</span></a>
+</div>
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-left"><span class="topbar-title">{% block page_title %}工作台{% endblock %}</span></div>
+    <div class="topbar-right"><div class="system-status"><span class="status-dot green"></span>系统运行中</div></div>
+  </div>
+  <div class="content">
+    {% block content %}{% endblock %}
+  </div>
+</div>
+</div>
+<div id="toast" style="position:fixed;bottom:32px;right:32px;background:#1a1a2e;color:#fff;padding:12px 24px;border-radius:8px;font-size:14px;display:none;z-index:2000;max-width:360px"></div>
+{% block scripts %}{% endblock %}
+</body>
+</html>

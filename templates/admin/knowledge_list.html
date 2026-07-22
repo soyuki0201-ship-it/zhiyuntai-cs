@@ -1,66 +1,45 @@
-<!DOCTYPE html>
-<html lang="zh">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>知识库 - 智云台AI客服</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box;}
-body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f5f6fa;color:#333;}
-.sidebar{position:fixed;left:0;top:0;bottom:0;width:200px;background:#1d1f25;color:#fff;padding:20px 0;}
-.sidebar h2{padding:0 20px 20px;font-size:16px;border-bottom:1px solid #333;}
-.sidebar a{display:block;padding:12px 20px;color:#999;text-decoration:none;font-size:14px;}
-.sidebar a:hover,.sidebar a.active{color:#fff;background:#2a2d35;}
-.main{margin-left:200px;padding:20px 30px;}
-.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;}
-.header h1{font-size:22px;}
-table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);}
-th,td{padding:12px 14px;text-align:left;font-size:13px;border-bottom:1px solid #eee;}
-th{background:#f8f9fb;font-weight:600;color:#555;}
-.btn{display:inline-block;padding:6px 14px;border:none;border-radius:4px;cursor:pointer;font-size:13px;text-decoration:none;}
-.btn-primary{background:#518dfe;color:#fff;}
-.btn-primary:hover{background:#3a7af5;}
-.btn-danger{background:#ef5350;color:#fff;}
-.btn-outline{background:transparent;border:1px solid #ddd;color:#666;padding:4px 10px;font-size:12px;}
-.btn-sm{padding:4px 10px;font-size:12px;}
-.empty{text-align:center;padding:60px;color:#999;}
-</style>
-</head>
-<body>
-<div class="sidebar">
-<h2>智云台AI客服</h2>
-<a href="{{ url_for('admin.conversation_list') }}">全部对话</a>
-<a href="{{ url_for('admin.pending_list') }}">待处理</a>
-<a href="{{ url_for('admin.active_list') }}">处理中</a>
-<a href="{{ url_for('admin.knowledge_list') }}" class="active">知识库</a>
-<a href="/admin/logout" style="position:absolute;bottom:20px;left:20px;color:#666;font-size:13px;">退出登录</a>
+{% extends "admin/base.html" %}
+{% block page_title %}知识库{% endblock %}
+{% block content %}
+<div class="stats-row">
+  <div class="stat-card"><div class="label">知识总数</div><div class="value">{{ knowledge_total }}</div></div>
+  <div class="stat-card"><div class="label">本月新增</div><div class="value">{{ knowledge_total }}</div></div>
 </div>
-<div class="main">
-<div class="header">
-<h1>知识库</h1>
-<a href="{{ url_for('admin.knowledge_add') }}" class="btn btn-primary">新增知识</a>
+<div class="card">
+  <div class="card-header"><h3>📚 知识列表</h3>
+    <div class="btn-group">
+      <a href="{{ url_for('admin.knowledge_import') }}" class="btn btn-outline btn-sm">📂 批量导入</a>
+      <a href="{{ url_for('admin.knowledge_add') }}" class="btn btn-primary btn-sm">＋ 新增知识</a>
+    </div>
+  </div>
+  <div style="padding:12px 16px;display:flex;gap:8px;border-bottom:1px solid #f0f0f0;flex-wrap:wrap">
+    <form method="GET" action="{{ url_for('admin.knowledge_list') }}" style="display:flex;gap:8px">
+      <input type="text" name="q" placeholder="搜索知识标题..." style="max-width:220px;padding:6px 10px;font-size:13px" value="{{ request.args.get('q', '') }}">
+      <button type="submit" class="btn btn-outline btn-sm">🔍 搜索</button>
+    </form>
+  </div>
+  {% if knowledge_list %}
+  <div class="table-wrap"><table>
+    <thead><tr><th style="width:36%">标题</th><th>分类</th><th>来源</th><th>更新时间</th><th>操作</th></tr></thead>
+    <tbody>
+    {% for k in knowledge_list %}
+    <tr>
+      <td>{{ k.title[:40] }}{% if k.title|length > 40 %}...{% endif %}</td>
+      <td><span class="tag tag-gray">{{ k.category or '-' }}</span></td>
+      <td>{{ k.source or '-' }}</td>
+      <td>{{ k.updated_at.strftime('%m-%d %H:%M') }}</td>
+      <td class="btn-group">
+        <a href="{{ url_for('admin.knowledge_edit', kid=k.id) }}" class="btn btn-outline btn-sm">编辑</a>
+        <form action="{{ url_for('admin.knowledge_delete', kid=k.id) }}" method="POST" style="display:inline" onsubmit="return confirm('确认删除？')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="btn btn-sm btn-danger">删除</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody></table></div>
+  {% else %}
+  <div class="empty-state">暂无知识库内容，请点击"新增知识"添加</div>
+  {% endif %}
 </div>
-{% if knowledge_list %}
-<table>
-<thead><tr><th>标题</th><th>分类</th><th>来源</th><th>更新时间</th><th>操作</th></tr></thead>
-<tbody>
-{% for k in knowledge_list %}
-<tr>
-<td>{{ k.title[:40] }}{% if k.title|length > 40 %}...{% endif %}</td>
-<td>{{ k.category or '-' }}</td>
-<td>{{ k.source or '-' }}</td>
-<td>{{ k.updated_at.strftime('%m-%d %H:%M') }}</td>
-<td>
-<a href="{{ url_for('admin.knowledge_edit', kid=k.id) }}" class="btn btn-outline btn-sm">编辑</a>
-<form action="{{ url_for('admin.knowledge_delete', kid=k.id) }}" method="POST" style="display:inline" onsubmit="return confirm('确认删除？')">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <button type="submit" class="btn btn-sm btn-danger">删除</button>
-</form>
-</td>
-</tr>
-{% endfor %}
-</tbody></table>
-{% else %}
-<div class="empty">暂无知识库内容，请点击"新增知识"添加</div>
-{% endif %}
-</div>
-</body>
-</html>
+{% endblock %}
