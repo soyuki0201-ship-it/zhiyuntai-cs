@@ -48,6 +48,7 @@
         <a href="{{ url_for('admin.active_list') }}" class="{% if request.endpoint == 'admin.active_list' %}active{% endif %}">处理中</a>
         <a href="{{ url_for('admin.knowledge_list') }}" class="{% if request.endpoint == 'admin.knowledge_list' %}active{% endif %}">知识库</a>
         <a href="{{ url_for('admin_config.platform_list') }}" class="{% if request.endpoint == 'admin_config.platform_list' %}active{% endif %}">平台配置</a>
+            <a href="/admin/logout" style="position:absolute;bottom:20px;left:20px;color:#666;font-size:13px;">退出登录</a>
     </div>
     <div class="main">
         <div class="header">
@@ -86,7 +87,7 @@
                         {% elif conv.channel == 'dingtalk' %}钉钉
                         {% else %}{{ conv.channel }}{% endif %}
                     </td>
-                    <td>{{ conv.last_message[:40] }}{% if conv.last_message|length > 40 %}...{% endif %}</td>
+                    <td>{{ conv.last_message[:100] }}{% if conv.last_message|length > 100 %}...{% endif %}</td>
                     <td>
                         {% if conv.status == 'active' %}
                         <span class="status-tag status-active">AI回复中</span>

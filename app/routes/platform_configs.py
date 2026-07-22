@@ -4,8 +4,8 @@
 """
 import json
 import logging
-from flask import Blueprint, render_template, request, redirect, url_for, jsonify
-from app import auth
+from functools import wraps
+from flask import Blueprint, render_template, request, redirect, url_for, jsonify, session
 from app.models.platform_config import PlatformConfig
 from app.models import db
 from app.core.platform_manager import get_platform_class, register_platform
@@ -15,6 +15,16 @@ logger = logging.getLogger(__name__)
 admin_config_bp = Blueprint("admin_config", __name__, url_prefix="/admin")
 
 
+def admin_required(f):
+    """Session 登录校验装饰器"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("admin_logged_in"):
+            return redirect(url_for("admin.login"))
+        return f(*args, **kwargs)
+    return decorated
+
+
 @admin_config_bp.context_processor
 def inject_csrf_token():
     """注入 CSRF Token 生成函数到所有模板"""
@@ -22,7 +32,7 @@ def inject_csrf_token():
 
 
 @admin_config_bp.route("/platforms")
-@auth.login_required
+@admin_required
 def platform_list():
     """平台配置列表"""
     configs = PlatformConfig.query.order_by(PlatformConfig.platform).all()
@@ -30,7 +40,7 @@ def platform_list():
 
 
 @admin_config_bp.route("/platforms/add", methods=["GET", "POST"])
-@auth.login_required
+@admin_required
 def platform_add():
     """新增平台配置"""
     if request.method == "POST":
@@ -83,7 +93,7 @@ def platform_add():
 
 
 @admin_config_bp.route("/platforms/<int:pid>/edit", methods=["GET", "POST"])
-@auth.login_required
+@admin_required
 def platform_edit(pid):
     """编辑平台配置"""
     pc = PlatformConfig.query.get_or_404(pid)
@@ -125,7 +135,7 @@ def platform_edit(pid):
 
 
 @admin_config_bp.route("/platforms/<int:pid>/delete", methods=["POST"])
-@auth.login_required
+@admin_required
 def platform_delete(pid):
     """删除平台配置"""
     # CSRF 验证
@@ -140,7 +150,7 @@ def platform_delete(pid):
 
 
 @admin_config_bp.route("/platforms/<int:pid>/test", methods=["POST"])
-@auth.login_required
+@admin_required
 def platform_test(pid):
     """测试平台连接"""
     pc = PlatformConfig.query.get_or_404(pid)
@@ -160,11 +170,13 @@ def _register_platform_from_config(pc: PlatformConfig):
     platform_cls = get_platform_class(pc.platform)
     if platform_cls:
         instance = platform_cls(pc.get_config())
+        # 标记配置ID，支持同一平台类型多实例
+        instance._config_id = pc.id
         register_platform(instance)
 
 
 @admin_config_bp.route("/platforms/schema/<platform_type>")
-@auth.login_required
+@admin_required
 def platform_schema(platform_type):
     """返回指定平台的配置 Schema（用于 AJAX 动态渲染）"""
     platform_cls = get_platform_class(platform_type)

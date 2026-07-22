@@ -1,11 +1,8 @@
 from flask import Flask
-from flask_httpauth import HTTPBasicAuth
 from app.config import Config
 from app.models import db
 from app.utils.scheduler import init_scheduler
 from app.core.platform_manager import register_platform
-
-auth = HTTPBasicAuth()
 
 
 def create_app(config_class=Config):
@@ -18,6 +15,9 @@ def create_app(config_class=Config):
             "SECRET_KEY 未配置！请在 .env 文件中设置 SECRET_KEY 为随机字符串。"
             "示例：SECRET_KEY=your-random-secret-key-here"
         )
+
+    # Session 配置
+    app.config["SESSION_PERMANENT"] = True
 
     # Init database
     db.init_app(app)

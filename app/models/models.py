@@ -80,6 +80,7 @@ class Knowledge(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     title = db.Column(db.String(256), nullable=False, comment="知识标题")
     content = db.Column(db.Text, nullable=False, comment="知识内容")
+    category = db.Column(db.String(64), nullable=True, comment="分类：产品功能介绍/产品常见问题/产品使用教程/付费相关/故障处理/需求提出/其他")
     source = db.Column(db.String(64), nullable=True, comment="来源：manual / chat / product")
     tags = db.Column(db.String(512), nullable=True, comment="标签（逗号分隔，方便分类筛选）")
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)

@@ -28,6 +28,7 @@ h1{font-size:20px;margin-bottom:20px;}
 <a href="{{ url_for('admin.pending_list') }}">待处理</a>
 <a href="{{ url_for('admin.active_list') }}">处理中</a>
 <a href="{{ url_for('admin.knowledge_list') }}">知识库</a>
+<a href="/admin/logout" style="position:absolute;bottom:20px;left:20px;color:#666;font-size:13px;">退出登录</a>
 </div>
 <div class="main">
 <a href="{{ url_for('admin.knowledge_list') }}" class="back-link">← 返回知识库</a>
@@ -37,6 +38,19 @@ h1{font-size:20px;margin-bottom:20px;}
 <div class="form-group">
 <label>标题</label>
 <input type="text" name="title" value="{{ knowledge.title if knowledge else '' }}" required>
+</div>
+<div class="form-group">
+<label>分类</label>
+<select name="category">
+    <option value="">无分类</option>
+    <option value="产品功能介绍" {% if knowledge and knowledge.category == '产品功能介绍' %}selected{% endif %}>产品功能介绍</option>
+    <option value="产品常见问题" {% if knowledge and knowledge.category == '产品常见问题' %}selected{% endif %}>产品常见问题</option>
+    <option value="产品使用教程" {% if knowledge and knowledge.category == '产品使用教程' %}selected{% endif %}>产品使用教程</option>
+    <option value="付费相关" {% if knowledge and knowledge.category == '付费相关' %}selected{% endif %}>付费相关</option>
+    <option value="故障处理" {% if knowledge and knowledge.category == '故障处理' %}selected{% endif %}>故障处理</option>
+    <option value="需求提出" {% if knowledge and knowledge.category == '需求提出' %}selected{% endif %}>需求提出</option>
+    <option value="其他" {% if knowledge and knowledge.category == '其他' %}selected{% endif %}>其他</option>
+</select>
 </div>
 <div class="form-group">
 <label>内容</label>

@@ -24,7 +24,6 @@ h1{font-size:20px;margin-bottom:20px;}
 function onPlatformChange(select) {
     var selected = select.value;
     if (!selected) return;
-    // 通过 AJAX 获取该平台的 schema 并动态渲染配置字段
     fetch('/admin/platforms/schema/' + selected)
         .then(function(r) { return r.json(); })
         .then(function(schema) {
@@ -41,6 +40,12 @@ function onPlatformChange(select) {
                 if (field.required) input.required = true;
                 if (field.readonly) input.readOnly = true;
                 input.placeholder = field.label;
+                if (field.key === 'callback_url') {
+                    var hint = document.createElement('div');
+                    hint.className = 'hint';
+                    hint.textContent = '部署后自动生成';
+                    div.appendChild(hint);
+                }
                 div.appendChild(label);
                 div.appendChild(input);
                 container.appendChild(div);
@@ -57,6 +62,7 @@ function onPlatformChange(select) {
 <a href="{{ url_for('admin.active_list') }}">处理中</a>
 <a href="{{ url_for('admin.knowledge_list') }}">知识库</a>
 <a href="{{ url_for('admin_config.platform_list') }}" class="active">平台配置</a>
+<a href="/admin/logout" style="position:absolute;bottom:20px;left:20px;color:#666;font-size:13px;">退出登录</a>
 </div>
 <div class="main">
 <a href="{{ url_for('admin_config.platform_list') }}" class="back-link">← 返回平台配置</a>
@@ -91,14 +97,14 @@ function onPlatformChange(select) {
             启用
         </label>
     </div>
-    {# 配置项：新增模式通过 JS 动态渲染，编辑模式服务端渲染 #}
+    {# 配置项：服务端预渲染（新增和编辑模式都可见），JS 负责切换平台类型时动态更新 #}
     <div id="config-fields">
-    {% if config and schema %}
+    {% if schema and schema.fields %}
         {% for field in schema.fields %}
         <div class="form-group">
             <label>{{ field.label }}{% if field.required %} <span style="color:red">*</span>{% endif %}</label>
             <input type="{{ field.type }}" name="cfg_{{ field.key }}"
-                   value="{{ config.get_config().get(field.key, '') }}"
+                   value="{{ config.get_config().get(field.key, '') if config else '' }}"
                    {% if field.required %}required{% endif %}
                    {% if field.readonly %}readonly{% endif %}
                    placeholder="{{ field.label }}">

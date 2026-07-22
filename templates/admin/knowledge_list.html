@@ -31,6 +31,7 @@ th{background:#f8f9fb;font-weight:600;color:#555;}
 <a href="{{ url_for('admin.pending_list') }}">待处理</a>
 <a href="{{ url_for('admin.active_list') }}">处理中</a>
 <a href="{{ url_for('admin.knowledge_list') }}" class="active">知识库</a>
+<a href="/admin/logout" style="position:absolute;bottom:20px;left:20px;color:#666;font-size:13px;">退出登录</a>
 </div>
 <div class="main">
 <div class="header">
@@ -39,13 +40,13 @@ th{background:#f8f9fb;font-weight:600;color:#555;}
 </div>
 {% if knowledge_list %}
 <table>
-<thead><tr><th>标题</th><th>来源</th><th>标签</th><th>更新时间</th><th>操作</th></tr></thead>
+<thead><tr><th>标题</th><th>分类</th><th>来源</th><th>更新时间</th><th>操作</th></tr></thead>
 <tbody>
 {% for k in knowledge_list %}
 <tr>
 <td>{{ k.title[:40] }}{% if k.title|length > 40 %}...{% endif %}</td>
+<td>{{ k.category or '-' }}</td>
 <td>{{ k.source or '-' }}</td>
-<td>{{ k.tags or '-' }}</td>
 <td>{{ k.updated_at.strftime('%m-%d %H:%M') }}</td>
 <td>
 <a href="{{ url_for('admin.knowledge_edit', kid=k.id) }}" class="btn btn-outline btn-sm">编辑</a>

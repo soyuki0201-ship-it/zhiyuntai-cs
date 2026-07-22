@@ -54,6 +54,10 @@ class Config:
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "image_cache"),
     )
 
-    # Admin auth
+    # Admin auth（部署时必须在 .env 中设置强密码）
     ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
-    ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
+    ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+    if not ADMIN_PASSWORD:
+        import warnings
+        warnings.warn("ADMIN_PASSWORD 未设置！请在 .env 中配置强密码。临时默认密码仅用于开发环境。")
+        ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123") or "admin123"

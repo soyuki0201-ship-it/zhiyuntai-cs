@@ -6,12 +6,12 @@
 - 处理中列表
 - 对话详情页（含接管/释放操作）
 - 知识库管理
+- 登录/退出
 """
 import logging
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, jsonify
-from flask_httpauth import HTTPBasicAuth
-from app import auth
+from functools import wraps
+from flask import Blueprint, render_template, request, redirect, url_for, jsonify, session
 from app.models.models import db, Conversation, Message, Knowledge
 from app.services.handoff_service import HandoffService
 from app.services.knowledge_service import KnowledgeService
@@ -21,10 +21,37 @@ logger = logging.getLogger(__name__)
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 
 
-@auth.verify_password
-def verify_password(username, password):
-    from flask import current_app
-    return (username == current_app.config["ADMIN_USERNAME"] and password == current_app.config["ADMIN_PASSWORD"])
+def admin_required(f):
+    """Session 登录校验装饰器"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("admin_logged_in"):
+            return redirect(url_for("admin.login"))
+        return f(*args, **kwargs)
+    return decorated
+
+
+@admin_bp.route("/login", methods=["GET", "POST"])
+def login():
+    """管理后台登录页面"""
+    if request.method == "POST":
+        from flask import current_app
+        username = request.form.get("username", "")
+        password = request.form.get("password", "")
+        if (username == current_app.config["ADMIN_USERNAME"] and
+            password == current_app.config["ADMIN_PASSWORD"]):
+            session["admin_logged_in"] = True
+            session.permanent = True
+            return redirect(url_for("admin.conversation_list"))
+        return render_template("admin/login.html", error="用户名或密码错误")
+    return render_template("admin/login.html", error=None)
+
+
+@admin_bp.route("/logout")
+def logout():
+    """退出登录"""
+    session.pop("admin_logged_in", None)
+    return redirect(url_for("admin.login"))
 
 
 @admin_bp.context_processor
@@ -35,7 +62,7 @@ def inject_csrf_token():
 
 @admin_bp.route("/")
 @admin_bp.route("/conversations")
-@auth.login_required
+@admin_required
 def conversation_list():
     page = request.args.get("page", 1, type=int)
     status_filter = request.args.get("status", "")
@@ -59,7 +86,7 @@ def conversation_list():
 
 
 @admin_bp.route("/conversations/<int:conv_id>")
-@auth.login_required
+@admin_required
 def conversation_detail(conv_id):
     conv = Conversation.query.get_or_404(conv_id)
     messages = Message.query.filter_by(conversation_id=conv_id).order_by(Message.created_at.asc()).all()
@@ -68,29 +95,33 @@ def conversation_detail(conv_id):
 
 
 @admin_bp.route("/takeover", methods=["POST"])
-@auth.login_required
+@admin_required
 @csrf_protected
 def takeover():
     user_id = request.form.get("user_id", "")
     if not user_id:
         return jsonify({"success": False, "message": "缺少 user_id"}), 400
     success = HandoffService.take_over(user_id)
-    return jsonify({"success": success})
+    if success:
+        return jsonify({"success": True, "message": "接管成功"})
+    return jsonify({"success": False, "message": "接管失败：客户无活跃对话"})
 
 
 @admin_bp.route("/release", methods=["POST"])
-@auth.login_required
+@admin_required
 @csrf_protected
 def release():
     user_id = request.form.get("user_id", "")
     if not user_id:
         return jsonify({"success": False, "message": "缺少 user_id"}), 400
     success = HandoffService.release(user_id)
-    return jsonify({"success": success})
+    if success:
+        return jsonify({"success": True, "message": "释放成功"})
+    return jsonify({"success": False, "message": "释放失败：该客户未被接管"})
 
 
 @admin_bp.route("/pending")
-@auth.login_required
+@admin_required
 def pending_list():
     page = request.args.get("page", 1, type=int)
     query = Conversation.query.filter(Conversation.status.in_(["transferred"]))
@@ -112,7 +143,7 @@ def pending_list():
 
 
 @admin_bp.route("/active")
-@auth.login_required
+@admin_required
 def active_list():
     page = request.args.get("page", 1, type=int)
     items, total = HandoffService.get_all_active(page=page, per_page=20)
@@ -120,7 +151,7 @@ def active_list():
 
 
 @admin_bp.route("/knowledge")
-@auth.login_required
+@admin_required
 def knowledge_list():
     page = request.args.get("page", 1, type=int)
     items, total = KnowledgeService.list_all(page=page, per_page=20)
@@ -128,35 +159,37 @@ def knowledge_list():
 
 
 @admin_bp.route("/knowledge/add", methods=["GET", "POST"])
-@auth.login_required
+@admin_required
 def knowledge_add():
     if request.method == "POST":
         title = request.form.get("title", "")
         content = request.form.get("content", "")
         source = request.form.get("source", "manual")
         tags = request.form.get("tags", "")
+        category = request.form.get("category", "")
         if title and content:
-            KnowledgeService.add(title, content, source, tags)
+            KnowledgeService.add(title, content, source=source, tags=tags, category=category or None)
             return redirect(url_for("admin.knowledge_list"))
     return render_template("admin/knowledge_form.html", knowledge=None)
 
 
 @admin_bp.route("/knowledge/<int:kid>/edit", methods=["GET", "POST"])
-@auth.login_required
+@admin_required
 def knowledge_edit(kid):
     knowledge = Knowledge.query.get_or_404(kid)
     if request.method == "POST":
         title = request.form.get("title", "")
         content = request.form.get("content", "")
         tags = request.form.get("tags", "")
+        category = request.form.get("category", "")
         if title and content:
-            KnowledgeService.update(kid, title=title, content=content, tags=tags)
+            KnowledgeService.update(kid, title=title, content=content, tags=tags, category=category or None)
             return redirect(url_for("admin.knowledge_list"))
     return render_template("admin/knowledge_form.html", knowledge=knowledge)
 
 
 @admin_bp.route("/knowledge/<int:kid>/delete", methods=["POST"])
-@auth.login_required
+@admin_required
 @csrf_protected
 def knowledge_delete(kid):
     KnowledgeService.delete(kid)

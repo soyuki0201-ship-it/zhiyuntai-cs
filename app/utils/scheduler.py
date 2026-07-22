@@ -30,7 +30,7 @@ def init_scheduler(app):
             except Exception as e:
                 logger.error(f"超时释放检查异常: {e}")
 
-    # D5：每天凌晨3点清理30天前的对话记录
+    # D5：每天凌晨3点清理90天前的对话记录
     @scheduler.scheduled_job("cron", hour=3, minute=0, id="cleanup_old_data")
     def cleanup_data():
         with app.app_context():
@@ -44,18 +44,18 @@ def init_scheduler(app):
 
 
 def _cleanup_expired_conversations():
-    """清理30天前的已关闭对话
+    """清理90天前的过期对话
 
     架构设计文档章节3：对话保留30天，每天凌晨清理
+    实际处理：清理90天前无更新的对话（包括 active/transferred/closed 状态）
     """
     from datetime import datetime, timedelta
     from app.models.models import db, Conversation, Message, Handoff
 
-    cutoff = datetime.utcnow() - timedelta(days=30)
+    cutoff = datetime.utcnow() - timedelta(days=90)
 
-    # 查找超30天的 closed 对话
+    # 查找90天前无更新的对话（不限状态）
     expired = Conversation.query.filter(
-        Conversation.status == "closed",
         Conversation.updated_at < cutoff,
     ).all()
 

@@ -14,7 +14,7 @@ class KnowledgeService:
     """知识库服务"""
 
     @staticmethod
-    def add(title: str, content: str, source: str = "manual", tags: str = None) -> int:
+    def add(title: str, content: str, source: str = "manual", tags: str = None, category: str = None) -> int:
         """新增知识（同时存入 MySQL 和 ChromaDB）
 
         Returns:
@@ -26,6 +26,7 @@ class KnowledgeService:
             content=content,
             source=source,
             tags=tags,
+            category=category,
         )
         db.session.add(knowledge)
         db.session.commit()
@@ -40,6 +41,7 @@ class KnowledgeService:
                 "title": title,
                 "source": source or "",
                 "tags": tags or "",
+                "category": category or "",
                 "chunk_index": i,
             }
             add_knowledge(chunk_id, chunk, metadata)
@@ -49,7 +51,7 @@ class KnowledgeService:
 
     @staticmethod
     def update(knowledge_id: int, title: str = None, content: str = None,
-               tags: str = None) -> bool:
+               tags: str = None, category: str = None) -> bool:
         """更新知识"""
         knowledge = Knowledge.query.get(knowledge_id)
         if not knowledge:
@@ -65,6 +67,8 @@ class KnowledgeService:
             knowledge.content = content
         if tags is not None:
             knowledge.tags = tags
+        if category is not None:
+            knowledge.category = category
         knowledge.updated_at = datetime.utcnow()
         db.session.commit()
 
@@ -77,6 +81,7 @@ class KnowledgeService:
                     "title": knowledge.title,
                     "source": knowledge.source or "",
                     "tags": knowledge.tags or "",
+                    "category": knowledge.category or "",
                     "chunk_index": i,
                 }
                 add_knowledge(chunk_id, chunk, metadata)

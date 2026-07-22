@@ -13,4 +13,4 @@ COPY . .
 EXPOSE 8000
 
 # 启动命令
-CMD ["gunicorn", "-w", "2", "-b", "0.0.0.0:8000", "run:app"]
+CMD ["gunicorn", "-w", "2", "-t", "60", "-b", "0.0.0.0:8000", "run:app"]
