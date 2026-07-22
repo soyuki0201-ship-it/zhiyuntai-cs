@@ -4,11 +4,9 @@
 新配置请走 /api/wechat_work/callback。
 """
 import logging
-import xml.etree.ElementTree as ET
 from threading import Thread
 from flask import Blueprint, request, Response, current_app
 from app.platforms.wechat_work import WeChatWorkPlatform
-from app.core.platform_interface import UnifiedMessage
 from app.services.conversation_service import process_unified_message
 
 logger = logging.getLogger(__name__)
