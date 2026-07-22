@@ -70,6 +70,7 @@ class Handoff(db.Model):
     __table_args__ = (
         db.Index("idx_h_user_id", "user_id"),
         db.Index("idx_h_status", "status"),
+        db.Index("idx_h_taken_at", "taken_at"),
     )
 
 

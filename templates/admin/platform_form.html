@@ -22,8 +22,30 @@ h1{font-size:20px;margin-bottom:20px;}
 </style>
 <script>
 function onPlatformChange(select) {
-    // 用户选择了平台类型后，通过API获取schema并动态渲染配置项
-    // 当前简化版：页面加载时已通过模板渲染
+    var selected = select.value;
+    if (!selected) return;
+    // 通过 AJAX 获取该平台的 schema 并动态渲染配置字段
+    fetch('/admin/platforms/schema/' + selected)
+        .then(function(r) { return r.json(); })
+        .then(function(schema) {
+            var container = document.getElementById('config-fields');
+            container.innerHTML = '';
+            schema.fields.forEach(function(field) {
+                var div = document.createElement('div');
+                div.className = 'form-group';
+                var label = document.createElement('label');
+                label.innerHTML = field.label + (field.required ? ' <span style="color:red">*</span>' : '');
+                var input = document.createElement('input');
+                input.type = field.type;
+                input.name = 'cfg_' + field.key;
+                if (field.required) input.required = true;
+                if (field.readonly) input.readOnly = true;
+                input.placeholder = field.label;
+                div.appendChild(label);
+                div.appendChild(input);
+                container.appendChild(div);
+            });
+        });
 }
 </script>
 </head>
@@ -40,6 +62,7 @@ function onPlatformChange(select) {
 <a href="{{ url_for('admin_config.platform_list') }}" class="back-link">← 返回平台配置</a>
 <h1>{{ '编辑配置' if config else '新增配置' }}</h1>
 <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 {% if config %}
     {# 编辑模式：平台类型只读 #}
     <div class="form-group">
@@ -68,22 +91,24 @@ function onPlatformChange(select) {
             启用
         </label>
     </div>
-    {% if config %}
-    {# 编辑模式：动态渲染配置项 #}
-    {% for field in schema.fields %}
-    <div class="form-group">
-        <label>{{ field.label }}{% if field.required %} <span style="color:red">*</span>{% endif %}</label>
-        <input type="{{ field.type }}" name="cfg_{{ field.key }}"
-               value="{{ config.config_json.get(field.key, '') }}"
-               {% if field.required %}required{% endif %}
-               {% if field.readonly %}readonly{% endif %}
-               placeholder="{{ field.label }}">
-        {% if field.key == 'callback_url' %}
-        <div class="hint">部署后自动生成</div>
-        {% endif %}
-    </div>
-    {% endfor %}
+    {# 配置项：新增模式通过 JS 动态渲染，编辑模式服务端渲染 #}
+    <div id="config-fields">
+    {% if config and schema %}
+        {% for field in schema.fields %}
+        <div class="form-group">
+            <label>{{ field.label }}{% if field.required %} <span style="color:red">*</span>{% endif %}</label>
+            <input type="{{ field.type }}" name="cfg_{{ field.key }}"
+                   value="{{ config.get_config().get(field.key, '') }}"
+                   {% if field.required %}required{% endif %}
+                   {% if field.readonly %}readonly{% endif %}
+                   placeholder="{{ field.label }}">
+            {% if field.key == 'callback_url' %}
+            <div class="hint">部署后自动生成</div>
+            {% endif %}
+        </div>
+        {% endfor %}
     {% endif %}
+    </div>
     <button type="submit" class="btn btn-primary">保存</button>
     <a href="{{ url_for('admin_config.platform_list') }}" class="btn btn-outline">取消</a>
 </form>

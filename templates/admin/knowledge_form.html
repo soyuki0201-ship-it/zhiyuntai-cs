@@ -33,6 +33,7 @@ h1{font-size:20px;margin-bottom:20px;}
 <a href="{{ url_for('admin.knowledge_list') }}" class="back-link">← 返回知识库</a>
 <h1>{{ '编辑知识' if knowledge else '新增知识' }}</h1>
 <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <div class="form-group">
 <label>标题</label>
 <input type="text" name="title" value="{{ knowledge.title if knowledge else '' }}" required>

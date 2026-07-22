@@ -12,6 +12,13 @@ def create_app(config_class=Config):
     app = Flask(__name__, template_folder="../templates", static_folder="../static")
     app.config.from_object(config_class)
 
+    # 检查 SECRET_KEY（生产环境必须配置）
+    if not app.config.get("SECRET_KEY"):
+        raise RuntimeError(
+            "SECRET_KEY 未配置！请在 .env 文件中设置 SECRET_KEY 为随机字符串。"
+            "示例：SECRET_KEY=your-random-secret-key-here"
+        )
+
     # Init database
     db.init_app(app)
 
@@ -24,17 +31,9 @@ def create_app(config_class=Config):
     app.register_blueprint(admin_bp)
     app.register_blueprint(admin_config_bp)
 
-    # 旧路由（过渡期保留，后续删除）
-    try:
-        from app.routes.callback import callback_bp
-        app.register_blueprint(callback_bp)
-    except Exception:
-        pass
-    try:
-        from app.routes.group_robot import group_robot_bp
-        app.register_blueprint(group_robot_bp)
-    except Exception:
-        pass
+    # 旧路由：已下线，通过新统一入口 /api/wechat_work/callback 处理
+    # 保留 callback.py / group_robot.py 文件用于参考，后续版本删除
+    # 不再自动注册旧路由，避免新旧配置路径混淆
 
     # Init scheduler
     if not app.config.get("TESTING"):
@@ -52,8 +51,10 @@ def create_app(config_class=Config):
                 persist_dir=app.config["CHROMA_PERSIST_DIR"],
                 model_name=app.config["EMBEDDING_MODEL_NAME"],
             )
+            app.logger.info("Embedding 模型加载成功")
         except Exception as e:
-            app.logger.warning(f"Embedding 模型加载失败（部署后再配置）: {e}")
+            app.logger.error(f"Embedding 模型加载失败，RAG 知识库检索不可用: {e}")
+            app.logger.error("请确认：1) 网络能访问 HuggingFace  2) 磁盘空间充足  3) sentence-transformers 已安装")
 
     return app
 
@@ -66,10 +67,13 @@ def _register_platforms(app):
 
         configs = PlatformConfig.query.filter_by(enabled=True).all()
         for pc in configs:
-            platform_cls = get_platform_class(pc.platform)
-            if platform_cls:
-                instance = platform_cls(pc.config_json)
-                register_platform(instance)
-                app.logger.info(f"平台已加载: {pc.platform} ({pc.name})")
+            try:
+                platform_cls = get_platform_class(pc.platform)
+                if platform_cls:
+                    instance = platform_cls(pc.get_config())
+                    register_platform(instance)
+                    app.logger.info(f"平台已加载: {pc.platform} ({pc.name})")
+            except Exception as e:
+                app.logger.error(f"平台 {pc.platform}({pc.name}) 加载失败: {e}")
     except Exception as e:
         app.logger.warning(f"平台加载失败（首次运行时正常）: {e}")

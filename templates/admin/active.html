@@ -46,6 +46,7 @@ th{background:#f8f9fb;font-weight:600;color:#555;}
 <form action="{{ url_for('admin.release') }}" method="POST" style="display:inline"
       hx-post="{{ url_for('admin.release') }}" hx-target="body" hx-swap="outerHTML" hx-confirm="确认释放该客户？">
     <input type="hidden" name="user_id" value="{{ h.user_id }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" class="btn btn-primary">释放</button>
 </form>
 </td>

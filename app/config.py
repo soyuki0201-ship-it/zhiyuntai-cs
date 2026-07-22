@@ -8,7 +8,7 @@ class Config:
     """Application configuration from environment variables."""
 
     # Flask
-    SECRET_KEY = os.getenv("SECRET_KEY", "change-this-in-production")
+    SECRET_KEY = os.getenv("SECRET_KEY", "")
     DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
     # MySQL
@@ -22,15 +22,6 @@ class Config:
         f"@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
         f"?charset=utf8mb4"
     )
-
-    # WeChat Work - 已迁移至数据库 platform_configs 表管理
-    WX_CORP_ID = os.getenv("WX_CORP_ID", "")
-    WX_AGENT_ID = os.getenv("WX_AGENT_ID", "")
-    WX_AGENT_SECRET = os.getenv("WX_AGENT_SECRET", "")
-    WX_TOKEN = os.getenv("WX_TOKEN", "")
-    WX_ENCODING_AES_KEY = os.getenv("WX_ENCODING_AES_KEY", "")
-    WX_GROUP_ROBOT_TOKEN = os.getenv("WX_GROUP_ROBOT_TOKEN", "")
-    WX_GROUP_ROBOT_WEBHOOK_URL = os.getenv("WX_GROUP_ROBOT_WEBHOOK_URL", "")
 
     # DeepSeek
     DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")

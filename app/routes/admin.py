@@ -15,6 +15,7 @@ from app import auth
 from app.models.models import db, Conversation, Message, Knowledge
 from app.services.handoff_service import HandoffService
 from app.services.knowledge_service import KnowledgeService
+from app.utils.csrf import generate_csrf_token, csrf_protected
 
 logger = logging.getLogger(__name__)
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -24,6 +25,12 @@ admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
 def verify_password(username, password):
     from flask import current_app
     return (username == current_app.config["ADMIN_USERNAME"] and password == current_app.config["ADMIN_PASSWORD"])
+
+
+@admin_bp.context_processor
+def inject_csrf_token():
+    """注入 CSRF Token 生成函数到所有模板"""
+    return dict(csrf_token=generate_csrf_token)
 
 
 @admin_bp.route("/")
@@ -62,6 +69,7 @@ def conversation_detail(conv_id):
 
 @admin_bp.route("/takeover", methods=["POST"])
 @auth.login_required
+@csrf_protected
 def takeover():
     user_id = request.form.get("user_id", "")
     if not user_id:
@@ -72,6 +80,7 @@ def takeover():
 
 @admin_bp.route("/release", methods=["POST"])
 @auth.login_required
+@csrf_protected
 def release():
     user_id = request.form.get("user_id", "")
     if not user_id:
@@ -148,6 +157,7 @@ def knowledge_edit(kid):
 
 @admin_bp.route("/knowledge/<int:kid>/delete", methods=["POST"])
 @auth.login_required
+@csrf_protected
 def knowledge_delete(kid):
     KnowledgeService.delete(kid)
     return redirect(url_for("admin.knowledge_list"))

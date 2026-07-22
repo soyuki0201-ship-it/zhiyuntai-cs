@@ -97,7 +97,10 @@ def _save_message(conversation_id: int, role: str, content: str, msg_type: str, 
 
 
 def get_conversation_history(conversation_id: int, max_rounds: int = 10) -> list[dict]:
-    msgs = Message.query.filter_by(conversation_id=conversation_id).order_by(Message.created_at.asc()).limit(max_rounds * 2).all()
+    msgs = Message.query.filter(
+        Message.conversation_id == conversation_id,
+        Message.role.in_(["user", "assistant"]),
+    ).order_by(Message.created_at.asc()).limit(max_rounds * 2).all()
     history = []
     for m in msgs:
         role = "user" if m.role == "user" else "assistant"

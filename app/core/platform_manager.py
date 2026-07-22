@@ -49,7 +49,7 @@ def get_enabled_platforms() -> list[PlatformInterface]:
         platform = get_platform(cfg.platform)
         if platform:
             # 用数据库中的配置更新平台实例
-            platform._config = cfg.config_json
+            platform._config = cfg.get_config()
             result.append(platform)
     return result
 

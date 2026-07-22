@@ -8,12 +8,14 @@ PaddleOCR 免费、中文识别准、本地 CPU 运行
 """
 import logging
 import os
+import threading
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Global OCR instance (lazy init, loaded once)
+# Global OCR instance (lazy init, loaded once with thread safety)
 _ocr = None
+_ocr_lock = threading.Lock()
 
 
 def init_ocr():
@@ -51,11 +53,13 @@ def extract_text_from_image(image_path: str) -> str:
         logger.error(f"图片文件不存在: {image_path}")
         return ""
 
-    # 懒加载 OCR
+    # 线程安全的懒加载 OCR
     if _ocr is None:
-        success = init_ocr()
-        if not success:
-            return ""
+        with _ocr_lock:
+            if _ocr is None:
+                success = init_ocr()
+                if not success:
+                    return ""
 
     try:
         result = _ocr.ocr(image_path, cls=True)

@@ -133,6 +133,23 @@ def delete_knowledge(doc_id: str):
     _vector_collection.delete(ids=[doc_id])
 
 
+def delete_knowledge_chunks(knowledge_id: int, max_chunks: int = 1000):
+    """安全删除某条知识的所有切片（只删除实际存在的，不删除不存在的）
+
+    Args:
+        knowledge_id: 知识 ID（对应 MySQL knowledge 表 id）
+        max_chunks: 最大预期切片数（安全上限）
+    """
+    candidate_ids = [f"{knowledge_id}_{i}" for i in range(max_chunks)]
+    # 查询实际存在的 ID
+    existing = _vector_collection.get(ids=candidate_ids)
+    if existing and existing["ids"]:
+        _vector_collection.delete(ids=existing["ids"])
+        logger.info(f"已删除知识 {knowledge_id} 的 {len(existing['ids'])} 个旧切片")
+        return len(existing["ids"])
+    return 0
+
+
 def update_knowledge(doc_id: str, text: str, metadata: dict = None):
     """更新向量库中的知识（先删后加）"""
     delete_knowledge(doc_id)

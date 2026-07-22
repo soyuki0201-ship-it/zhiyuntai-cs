@@ -42,14 +42,11 @@ docker compose up -d
 
 | 变量 | 说明 |
 |------|------|
+| `SECRET_KEY` | Flask 密钥（必须，否则应用拒绝启动） |
 | `DEEPSEEK_API_KEY` | DeepSeek API Key |
-| `WX_CORP_ID` | 企业微信 CorpID |
-| `WX_AGENT_SECRET` | 企业微信应用 Secret |
-| `WX_TOKEN` | 回调验证 Token |
-| `WX_ENCODING_AES_KEY` | 回调加解密密钥 |
 | `MYSQL_PASSWORD` | 数据库密码 |
 
-完整配置项详见 `.env.example`。
+完整配置项详见 `.env.example`。企业微信配置统一通过管理后台「平台配置」页面录入，无需在 .env 中配置。
 
 ## 项目结构
 
@@ -60,9 +57,10 @@ docker compose up -d
 │   ├── models/            ← 数据模型
 │   ├── routes/            ← API 路由
 │   ├── services/          ← 业务逻辑层
-│   └── utils/             ← 工具模块
+│   └── utils/             ← 工具模块（含 csrf.py、ocr.py、vector_store.py 等）
 ├── deploy/                ← 部署配置
 ├── templates/             ← 管理后台模板
+├── scripts/               ← 数据库建表脚本
 ├── .github/workflows/     ← CI/CD 配置
 ├── docker-compose.yml     ← Docker 编排
 ├── Dockerfile             ← 镜像构建
