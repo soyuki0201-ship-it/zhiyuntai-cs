@@ -1,11 +1,13 @@
 """数据模型
 
-4张核心表 + 1张平台配置表：
+4张核心表 + 1张平台配置表 + 2张AI配置表：
 - conversations: 对话表
 - messages: 消息表
 - handoffs: 接管表
 - knowledge: 知识库原文表
 - platform_configs: 平台配置表（多IM架构）
+- ai_providers: AI模型供应商配置表
+- ai_config: AI系统配置表（单例）
 """
 from datetime import datetime
 from app.models import db
@@ -87,3 +89,41 @@ class Knowledge(db.Model):
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     __table_args__ = (db.Index("idx_source", "source"),)
+
+
+class AIProvider(db.Model):
+    """AI模型供应商配置"""
+    __tablename__ = "ai_providers"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(128), nullable=False, comment="配置名称")
+    provider = db.Column(db.String(64), nullable=False, comment="供应商标识：deepseek / openai / qwen / kimi / custom")
+    model_name = db.Column(db.String(128), nullable=False, comment="模型名称：deepseek-chat / gpt-4o / qwen-plus 等")
+    api_url = db.Column(db.String(512), nullable=False, comment="API 地址")
+    api_key = db.Column(db.String(512), nullable=False, comment="API Key（加密存储）")
+    is_primary = db.Column(db.Boolean, nullable=False, default=False, comment="是否主模型")
+    enabled = db.Column(db.Boolean, nullable=False, default=True, comment="是否启用")
+    sort_order = db.Column(db.Integer, nullable=False, default=0, comment="排序（主模型优先）")
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    __table_args__ = (
+        db.Index("idx_ai_enabled", "enabled"),
+        db.Index("idx_ai_primary", "is_primary"),
+    )
+
+
+class AIConfig(db.Model):
+    """AI系统配置（单例）"""
+    __tablename__ = "ai_config"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    ai_name = db.Column(db.String(128), nullable=False, default="智云台助手", comment="AI显示名称")
+    system_prompt = db.Column(db.Text, nullable=False, comment="系统提示词")
+    temperature = db.Column(db.Float, nullable=False, default=0.7, comment="回复温度 (0-1)")
+    max_tokens = db.Column(db.Integer, nullable=False, default=2000, comment="单次最大Token数")
+    max_history_rounds = db.Column(db.Integer, nullable=False, default=10, comment="对话保留轮数")
+    handoff_markers = db.Column(db.Text, nullable=True, comment="转人工关键词（逗号分隔）")
+    rag_top_k = db.Column(db.Integer, nullable=False, default=5, comment="检索TOP-K")
+    rag_similarity_threshold = db.Column(db.Float, nullable=False, default=0.6, comment="相似度阈值")
+    updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

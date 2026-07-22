@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI配置 - 智云台AI客服</title>
+<script src="https://unpkg.com/htmx.org@1.9.12"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f5f6fa;color:#333}
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:200px;background:#1d1f25;color:#fff;padding:20px 0}
+.sidebar h2{padding:0 20px 20px;font-size:16px;border-bottom:1px solid #333}
+.sidebar a{display:block;padding:12px 20px;color:#999;text-decoration:none;font-size:14px}
+.sidebar a:hover,.sidebar a.active{color:#fff;background:#2a2d35}
+.main{margin-left:200px;padding:20px 30px}
+h1{font-size:22px;margin-bottom:20px}
+.card{background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,0.08);margin-bottom:20px;overflow:hidden}
+.card-header{padding:16px 20px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center}
+.card-header h3{font-size:15px;font-weight:600}
+.card-body{padding:20px}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:13px;color:#555;margin-bottom:4px}
+.form-group input,.form-group select,.form-group textarea{width:100%;max-width:600px;padding:8px 12px;border:1px solid #ddd;border-radius:4px;font-size:14px}
+.form-group textarea{min-height:100px}
+.form-group .hint{font-size:12px;color:#999;margin-top:2px}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.btn{display:inline-block;padding:6px 14px;border:none;border-radius:4px;cursor:pointer;font-size:13px;text-decoration:none}
+.btn-primary{background:#518dfe;color:#fff}
+.btn-primary:hover{background:#3a7af5}
+.btn-danger{background:#ef5350;color:#fff}
+.btn-outline{background:transparent;border:1px solid #ddd;color:#666}
+.btn-outline:hover{border-color:#518dfe;color:#518dfe}
+.btn-sm{padding:4px 10px;font-size:12px}
+.empty{text-align:center;padding:60px;color:#999}
+.tag{display:inline-block;padding:2px 8px;border-radius:3px;font-size:12px}
+.tag-green{background:#e8f5e9;color:#2e7d32}
+.tag-orange{background:#fff3e0;color:#e65100}
+.tag-gray{background:#f5f5f5;color:#999}
+.tag-blue{background:#e3f2fd;color:#1565c0}
+.model-card{border:1px solid #e8e8e8;border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.model-card.primary{border-color:#b7eb8f;background:#f6ffed}
+.model-card .info{flex:1;min-width:120px}
+.model-card .info .name{font-weight:600;font-size:14px}
+.model-card .info .meta{font-size:12px;color:#999;margin-top:2px}
+.model-card .actions{display:flex;gap:6px;flex-wrap:wrap}
+.add-model-card{border:1px dashed #ddd;border-radius:8px;padding:24px;text-align:center;cursor:pointer}
+.add-model-card:hover{border-color:#518dfe}
+.add-model-card span{color:#518dfe;font-size:14px}
+.alert-info{padding:12px 16px;background:#e3f2fd;border:1px solid #90caf9;border-radius:6px;font-size:13px;color:#1565c0;margin-top:12px}
+</style>
+</head>
+<body>
+<div class="sidebar">
+<h2>智云台AI客服</h2>
+<a href="{{ url_for('admin.conversation_list') }}">全部对话</a>
+<a href="{{ url_for('admin.pending_list') }}">待处理</a>
+<a href="{{ url_for('admin.active_list') }}">处理中</a>
+<a href="{{ url_for('admin.knowledge_list') }}">知识库</a>
+<a href="{{ url_for('admin_config.platform_list') }}">平台配置</a>
+<a href="{{ url_for('ai_config.ai_config_page') }}" class="active">AI配置</a>
+<a href="/admin/logout" style="position:absolute;bottom:20px;left:20px;color:#666;font-size:13px;">退出登录</a>
+</div>
+<div class="main">
+<h1>🧠 AI 配置</h1>
+
+<!-- 大模型配置 -->
+<div class="card">
+<div class="card-header"><h3>大模型配置</h3>
+<div class="btn-group">
+    <button class="btn btn-outline btn-sm" onclick="testAllModels()">📡 测试所有模型</button>
+    <button class="btn btn-primary" onclick="showAddModal()">＋ 添加模型</button>
+</div>
+</div>
+<div class="card-body" id="provider-list">
+{% if providers %}
+    {% for p in providers %}
+    <div class="model-card {% if p.is_primary %}primary{% endif %}">
+        <div class="info">
+            <div class="name">{{ p.name }} {% if p.is_primary %}<span class="tag tag-green">主模型</span>{% endif %}</div>
+            <div class="meta">{{ p.model_name }} · {{ p.provider }}{% if p.enabled %} · <span class="tag tag-blue">已启用</span>{% else %}<span class="tag tag-gray">已禁用</span>{% endif %}</div>
+        </div>
+        <div class="actions">
+            <button class="btn btn-outline btn-sm" onclick="editModel({{ p.id }})">⚙️ 编辑</button>
+            <button class="btn btn-outline btn-sm" onclick="testModel({{ p.id }})">📡 测试</button>
+            {% if not p.is_primary %}
+            <button class="btn btn-outline btn-sm" onclick="setPrimary({{ p.id }})">⭐ 主模型</button>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="empty">暂未配置 AI 模型</div>
+{% endif %}
+    <div class="add-model-card" onclick="showAddModal()">
+        <span>＋ 添加更多模型（支持 DeepSeek、OpenAI、通义千问、Kimi 等）</span>
+    </div>
+    <div class="alert-info">💡 可配置多个模型，同一时间仅「主模型」回复客户。主模型故障时自动切换其他已启用模型。</div>
+</div>
+</div>
+
+<!-- 对话参数 -->
+<div class="card">
+<div class="card-header"><h3>⚙️ 对话参数（通用）</h3></div>
+<div class="card-body">
+<form id="config-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-row">
+        <div class="form-group"><label>AI 名称</label><input type="text" name="ai_name" value="{{ config.ai_name }}"><div class="hint">客户看到的 AI 名称，所有模型共用</div></div>
+        <div class="form-group"><label>回复温度 (0-1)</label><input type="text" name="temperature" value="{{ config.temperature }}"><div class="hint">越低越确定，越高越有创造性</div></div>
+    </div>
+    <div class="form-row">
+        <div class="form-group"><label>最大 Token 数</label><input type="text" name="max_tokens" value="{{ config.max_tokens }}"><div class="hint">单次回复最大字数</div></div>
+        <div class="form-group"><label>对话保留轮数</label><input type="text" name="max_history_rounds" value="{{ config.max_history_rounds }}"><div class="hint">AI 记住最近多少轮对话</div></div>
+    </div>
+    <button type="button" class="btn btn-outline btn-sm" onclick="saveConfig()">💾 保存对话参数</button>
+</form>
+</div>
+</div>
+
+<!-- 提示词 -->
+<div class="card">
+<div class="card-header"><h3>📝 提示词（Prompt）</h3></div>
+<div class="card-body">
+<div class="form-group"><label>系统提示词</label><textarea name="system_prompt" style="max-width:100%;min-height:150px">{{ config.system_prompt }}</textarea><div class="hint">修改提示词影响所有模型的回答风格</div></div>
+<button type="button" class="btn btn-outline btn-sm" onclick="savePrompt()">💾 保存提示词</button>
+</div>
+</div>
+
+<!-- RAG -->
+<div class="card">
+<div class="card-header"><h3>📖 知识库检索（RAG）</h3></div>
+<div class="card-body">
+<div class="form-row">
+    <div class="form-group"><label>检索 TOP-K</label><input type="text" id="rag_top_k" value="{{ config.rag_top_k }}"><div class="hint">每次提问检索条数</div></div>
+    <div class="form-group"><label>相似度阈值</label><input type="text" id="rag_similarity_threshold" value="{{ config.rag_similarity_threshold }}"><div class="hint">低于此值视为无匹配 (0-1)</div></div>
+</div>
+<button type="button" class="btn btn-outline btn-sm" onclick="saveRag()">💾 保存 RAG 配置</button>
+</div>
+</div>
+
+</div>
+
+<!-- Modal: 添加模型 -->
+<div id="add-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:center;justify-content:center;padding:20px">
+<div style="background:#fff;border-radius:12px;width:560px;max-width:100%;max-height:80vh;overflow-y:auto;margin:auto;margin-top:10vh">
+<div style="padding:16px 20px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center"><h3 style="font-size:16px">🧠 添加 AI 模型</h3><button style="border:none;background:none;font-size:20px;cursor:pointer;color:#999" onclick="hideAddModal()">×</button></div>
+<div style="padding:20px">
+<form id="add-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="form-group"><label>模型供应商 <span style="color:red">*</span></label>
+        <select name="provider" onchange="document.getElementById('add-api-url').value=this.value">
+            <option value="">请选择...</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="openai">OpenAI（ChatGPT）</option>
+            <option value="qwen">通义千问（阿里云）</option>
+            <option value="kimi">Kimi（月之暗面）</option>
+            <option value="custom">自定义</option>
+        </select>
+    </div>
+    <div class="form-group"><label>API 地址 <span style="color:red">*</span></label><input id="add-api-url" type="text" name="api_url" placeholder="https://api.xxx.com/v1/chat/completions"></div>
+    <div class="form-row">
+        <div class="form-group"><label>模型名称 <span style="color:red">*</span></label><input type="text" name="model_name" placeholder="deepseek-chat / gpt-4o / qwen-plus"></div>
+        <div class="form-group"><label>API Key <span style="color:red">*</span></label><input type="password" name="api_key" placeholder="sk-..."></div>
+    </div>
+    <div class="form-group"><label>配置名称</label><input type="text" name="name" placeholder="如 通义千问-生产环境"></div>
+    <div class="form-group"><label><input type="checkbox" name="enabled" value="1" checked> 添加后立即启用</label></div>
+    <div style="padding:12px 16px;background:#e6f7ff;border:1px solid #91d5ff;border-radius:6px;font-size:13px;color:#1890ff">💡 兼容 OpenAI 格式可直接使用</div>
+</form>
+</div>
+<div style="padding:16px 20px;border-top:1px solid #eee;display:flex;justify-content:flex-end;gap:8px">
+    <button class="btn btn-outline" onclick="hideAddModal()">取消</button>
+    <button class="btn btn-primary" onclick="submitAdd()">添加</button>
+</div>
+</div></div>
+
+<!-- Toast -->
+<div id="toast" style="display:none;position:fixed;bottom:30px;right:30px;background:#323232;color:#fff;padding:12px 24px;border-radius:8px;font-size:14px;z-index:9999"></div>
+
+<script>
+function showToast(msg, isError) {
+    var t = document.getElementById('toast');
+    t.style.background = isError ? '#d32f2f' : '#323232';
+    t.textContent = msg;
+    t.style.display = 'block';
+    setTimeout(function(){ t.style.display = 'none'; }, 3000);
+}
+
+function showAddModal() { document.getElementById('add-modal').style.display = 'flex'; }
+function hideAddModal() { document.getElementById('add-modal').style.display = 'none'; }
+
+function submitAdd() {
+    var form = document.getElementById('add-form');
+    var data = new FormData(form);
+    fetch('/admin/ai-config/providers/add', { method: 'POST', body: data })
+    .then(function(r) { return r.json(); })
+    .then(function(d) {
+        if (d.success) { showToast(d.message); location.reload(); }
+        else { showToast(d.message || '添加失败', true); }
+    });
+}
+
+function editModel(id) {
+    // Since we pass encrypted keys, we open edit inline or redirect
+    showToast('编辑功能请直接在列表中操作，先删除再添加');
+}
+
+function deleteModel(id) {
+    if (!confirm('确认删除该模型？')) return;
+    var f = new FormData();
+    f.append('csrf_token', document.querySelector('[name=csrf_token]').value);
+    fetch('/admin/ai-config/providers/' + id + '/delete', { method: 'POST', body: f })
+    .then(function(r) { return r.json(); })
+    .then(function(d) { showToast(d.message); location.reload(); });
+}
+
+function testModel(id) {
+    var f = new FormData();
+    fetch('/admin/ai-config/providers/' + id + '/test', { method: 'POST', body: f })
+    .then(function(r) { return r.json(); })
+    .then(function(d) { showToast(d.message, !d.success); });
+}
+
+function testAllModels() {
+    showToast('正在测试所有已启用模型...');
+    var ids = [];
+    {% for p in providers %}
+    ids.push({{ p.id }});
+    {% endfor %}
+    if (ids.length === 0) { showToast('暂无模型可测试', true); return; }
+    var pending = ids.length;
+    ids.forEach(function(id) {
+        var f = new FormData();
+        fetch('/admin/ai-config/providers/' + id + '/test', { method: 'POST', body: f })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            pending--;
+            if (pending === 0) showToast('全部模型测试完成');
+        });
+    });
+}
+
+function setPrimary(id) {
+    var f = new FormData();
+    f.append('csrf_token', document.querySelector('[name=csrf_token]').value);
+    fetch('/admin/ai-config/providers/' + id + '/set-primary', { method: 'POST', body: f })
+    .then(function(r) { return r.json(); })
+    .then(function(d) { showToast(d.message); location.reload(); });
+}
+
+function saveConfig() {
+    var form = document.getElementById('config-form');
+    var data = new FormData(form);
+    data.append('system_prompt', document.querySelector('[name=system_prompt]').value);
+    data.append('handoff_markers', '');
+    data.append('rag_top_k', document.getElementById('rag_top_k').value);
+    data.append('rag_similarity_threshold', document.getElementById('rag_similarity_threshold').value);
+    fetch('/admin/ai-config/config', { method: 'POST', body: data })
+    .then(function(r) { return r.json(); })
+    .then(function(d) { showToast(d.message); });
+}
+
+function savePrompt() {
+    var f = new FormData();
+    f.append('csrf_token', document.querySelector('[name=csrf_token]').value);
+    f.append('system_prompt', document.querySelector('[name=system_prompt]').value);
+    fetch('/admin/ai-config/config', { method: 'POST', body: f })
+    .then(function(r) { return r.json(); })
+    .then(function(d) { showToast(d.message); });
+}
+
+function saveRag() {
+    var f = new FormData();
+    f.append('csrf_token', document.querySelector('[name=csrf_token]').value);
+    f.append('rag_top_k', document.getElementById('rag_top_k').value);
+    f.append('rag_similarity_threshold', document.getElementById('rag_similarity_threshold').value);
+    fetch('/admin/ai-config/config', { method: 'POST', body: f })
+    .then(function(r) { return r.json(); })
+    .then(function(d) { showToast(d.message); });
+}
+</script>
+</body>
+</html>

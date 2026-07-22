@@ -1,6 +1,6 @@
 """Prompt 构造器
 
-根据对话上下文、知识片段、系统指令构造发给 DeepSeek 的完整 Prompt。
+根据对话上下文、知识片段、系统指令构造发给 AI 的完整 Prompt。
 """
 
 
@@ -25,6 +25,40 @@ class PromptBuilder:
         "4. 不要替客服做出任何承诺（赔偿、退款、时限保证等）"
     )
 
+    handoff_markers = [
+        "转给人工客服",
+        "已转给人工客服",
+        "转人工客服处理",
+        "我无法确定",
+        "无法回答这个问题",
+        "需要转给人工",
+        "需要人工客服",
+    ]
+
+    @classmethod
+    def get_system_prompt(cls) -> str:
+        """获取系统提示词（优先使用数据库中的配置）"""
+        try:
+            from app.models.models import AIConfig
+            config = AIConfig.query.first()
+            if config and config.system_prompt:
+                return config.system_prompt
+        except Exception:
+            pass
+        return cls.SYSTEM_PROMPT
+
+    @classmethod
+    def get_handoff_markers(cls) -> list[str]:
+        """获取转人工关键词列表（优先使用数据库中的配置）"""
+        try:
+            from app.models.models import AIConfig
+            config = AIConfig.query.first()
+            if config and config.handoff_markers:
+                return [m.strip() for m in config.handoff_markers.split(",") if m.strip()]
+        except Exception:
+            pass
+        return cls.handoff_markers
+
     @classmethod
     def build_messages(
         cls,
@@ -42,9 +76,9 @@ class PromptBuilder:
             is_handoff_waiting: 是否在等待人工接管的等待期
 
         Returns:
-            list[dict]: messages 列表，可直接传给 DeepSeek API
+            list[dict]: messages 列表，可直接传给 AI API
         """
-        system = cls.SYSTEM_PROMPT
+        system = cls.get_system_prompt()
         if is_handoff_waiting:
             system += cls.WAITING_PROMPT
 
@@ -76,13 +110,5 @@ class PromptBuilder:
         Returns:
             bool: 是否需要转人工
         """
-        handoff_markers = [
-            "转给人工客服",
-            "已转给人工客服",
-            "转人工客服处理",
-            "我无法确定",
-            "无法回答这个问题",
-            "需要转给人工",
-            "需要人工客服",
-        ]
-        return any(marker in ai_reply for marker in handoff_markers)
+        markers = cls.get_handoff_markers()
+        return any(marker in ai_reply for marker in markers)

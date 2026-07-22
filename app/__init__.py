@@ -26,10 +26,12 @@ def create_app(config_class=Config):
     from app.routes.api import api_bp
     from app.routes.admin import admin_bp
     from app.routes.platform_configs import admin_config_bp
+    from app.routes.ai_config import ai_config_bp
 
     app.register_blueprint(api_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(admin_config_bp)
+    app.register_blueprint(ai_config_bp)
 
     # 旧路由：已下线，通过新统一入口 /api/wechat_work/callback 处理
     # 保留 callback.py / group_robot.py 文件用于参考，后续版本删除
