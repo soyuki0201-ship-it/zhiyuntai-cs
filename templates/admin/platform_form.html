@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ '编辑配置' if config else '新增配置' }} - 智云台AI客服</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f5f6fa;color:#333;}
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:200px;background:#1d1f25;color:#fff;padding:20px 0;}
+.sidebar h2{padding:0 20px 20px;font-size:16px;border-bottom:1px solid #333;}
+.sidebar a{display:block;padding:12px 20px;color:#999;text-decoration:none;font-size:14px;}
+.sidebar a:hover,.sidebar a.active{color:#fff;background:#2a2d35;}
+.main{margin-left:200px;padding:20px 30px;}
+h1{font-size:20px;margin-bottom:20px;}
+.form-group{margin-bottom:16px;}
+.form-group label{display:block;font-size:14px;color:#555;margin-bottom:4px;}
+.form-group input,.form-group select{width:100%;max-width:500px;padding:8px 12px;border:1px solid #ddd;border-radius:4px;font-size:14px;}
+.form-group .hint{font-size:12px;color:#999;margin-top:2px;}
+.btn{display:inline-block;padding:8px 18px;border:none;border-radius:4px;cursor:pointer;font-size:14px;text-decoration:none;}
+.btn-primary{background:#518dfe;color:#fff;}
+.btn-outline{background:#fff;border:1px solid #ddd;color:#666;margin-left:8px;}
+.back-link{display:inline-block;margin-bottom:16px;color:#518dfe;text-decoration:none;font-size:14px;}
+</style>
+<script>
+function onPlatformChange(select) {
+    // 用户选择了平台类型后，通过API获取schema并动态渲染配置项
+    // 当前简化版：页面加载时已通过模板渲染
+}
+</script>
+</head>
+<body>
+<div class="sidebar">
+<h2>智云台AI客服</h2>
+<a href="{{ url_for('admin.conversation_list') }}">全部对话</a>
+<a href="{{ url_for('admin.pending_list') }}">待处理</a>
+<a href="{{ url_for('admin.active_list') }}">处理中</a>
+<a href="{{ url_for('admin.knowledge_list') }}">知识库</a>
+<a href="{{ url_for('admin_config.platform_list') }}" class="active">平台配置</a>
+</div>
+<div class="main">
+<a href="{{ url_for('admin_config.platform_list') }}" class="back-link">← 返回平台配置</a>
+<h1>{{ '编辑配置' if config else '新增配置' }}</h1>
+<form method="POST">
+{% if config %}
+    {# 编辑模式：平台类型只读 #}
+    <div class="form-group">
+        <label>平台类型</label>
+        <input type="text" value="{{ config.platform }}" readonly>
+    </div>
+{% else %}
+    {# 新增模式：选择平台类型 #}
+    <div class="form-group">
+        <label>平台类型</label>
+        <select name="platform" onchange="onPlatformChange(this)" required>
+            <option value="">请选择...</option>
+            {% for a in available %}
+            <option value="{{ a.type }}">{{ a.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+{% endif %}
+    <div class="form-group">
+        <label>配置名称</label>
+        <input type="text" name="name" value="{{ config.name if config else '' }}" required placeholder="例如：企业微信-生产环境">
+    </div>
+    <div class="form-group">
+        <label>
+            <input type="checkbox" name="enabled" value="1" {% if not config or config.enabled %}checked{% endif %}>
+            启用
+        </label>
+    </div>
+    {% if config %}
+    {# 编辑模式：动态渲染配置项 #}
+    {% for field in schema.fields %}
+    <div class="form-group">
+        <label>{{ field.label }}{% if field.required %} <span style="color:red">*</span>{% endif %}</label>
+        <input type="{{ field.type }}" name="cfg_{{ field.key }}"
+               value="{{ config.config_json.get(field.key, '') }}"
+               {% if field.required %}required{% endif %}
+               {% if field.readonly %}readonly{% endif %}
+               placeholder="{{ field.label }}">
+        {% if field.key == 'callback_url' %}
+        <div class="hint">部署后自动生成</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% endif %}
+    <button type="submit" class="btn btn-primary">保存</button>
+    <a href="{{ url_for('admin_config.platform_list') }}" class="btn btn-outline">取消</a>
+</form>
+</div>
+</body>
+</html>

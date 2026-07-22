@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>处理中 - 智云台AI客服</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f5f6fa;color:#333;}
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:200px;background:#1d1f25;color:#fff;padding:20px 0;}
+.sidebar h2{padding:0 20px 20px;font-size:16px;border-bottom:1px solid #333;}
+.sidebar a{display:block;padding:12px 20px;color:#999;text-decoration:none;font-size:14px;}
+.sidebar a:hover,.sidebar a.active{color:#fff;background:#2a2d35;}
+.main{margin-left:200px;padding:20px 30px;}
+.header{margin-bottom:20px;}
+.header h1{font-size:22px;}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);}
+th,td{padding:12px 14px;text-align:left;font-size:13px;border-bottom:1px solid #eee;}
+th{background:#f8f9fb;font-weight:600;color:#555;}
+.btn{display:inline-block;padding:4px 10px;border:none;border-radius:4px;cursor:pointer;font-size:12px;text-decoration:none;}
+.btn-primary{background:#518dfe;color:#fff;}
+.btn-primary:hover{background:#3a7af5;}
+.empty{text-align:center;padding:60px;color:#999;}
+.status-tag{display:inline-block;padding:2px 8px;border-radius:3px;font-size:12px;background:#fff3e0;color:#e65100;}
+</style>
+</head>
+<body>
+<div class="sidebar">
+<h2>智云台AI客服</h2>
+<a href="{{ url_for('admin.conversation_list') }}">全部对话</a>
+<a href="{{ url_for('admin.pending_list') }}">待处理</a>
+<a href="{{ url_for('admin.active_list') }}" class="active">处理中</a>
+<a href="{{ url_for('admin.knowledge_list') }}">知识库</a>
+</div>
+<div class="main">
+<div class="header"><h1>处理中列表</h1></div>
+{% if handoffs %}
+<table>
+<thead><tr><th>客户</th><th>处理人</th><th>接管时间</th><th>最后活跃</th><th>操作</th></tr></thead>
+<tbody>
+{% for h in handoffs %}
+<tr>
+<td>{{ h.user_name or h.user_id[:20] }}{% if not h.user_name and h.user_id|length > 20 %}...{% endif %}<br><small>{{ h.user_id[:30] }}</small></td>
+<td>{{ h.handled_by or '未指定' }}</td>
+<td>{{ h.taken_at.strftime('%m-%d %H:%M') }}</td>
+<td>{{ h.last_active_at.strftime('%m-%d %H:%M') if h.last_active_at else '-' }}</td>
+<td>
+<form action="{{ url_for('admin.release') }}" method="POST" style="display:inline"
+      hx-post="{{ url_for('admin.release') }}" hx-target="body" hx-swap="outerHTML" hx-confirm="确认释放该客户？">
+    <input type="hidden" name="user_id" value="{{ h.user_id }}">
+    <button type="submit" class="btn btn-primary">释放</button>
+</form>
+</td>
+</tr>
+{% endfor %}
+</tbody></table>
+{% else %}
+<div class="empty">暂无处理中的对话</div>
+{% endif %}
+</div>
+</body>
+</html>

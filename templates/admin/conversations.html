@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>智云台AI客服 - 管理后台</title>
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f6fa; color: #333; }
+        .sidebar { position: fixed; left: 0; top: 0; bottom: 0; width: 200px; background: #1d1f25; color: #fff; padding: 20px 0; }
+        .sidebar h2 { padding: 0 20px 20px; font-size: 16px; border-bottom: 1px solid #333; }
+        .sidebar a { display: block; padding: 12px 20px; color: #999; text-decoration: none; font-size: 14px; }
+        .sidebar a:hover, .sidebar a.active { color: #fff; background: #2a2d35; }
+        .main { margin-left: 200px; padding: 20px 30px; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .header h1 { font-size: 22px; }
+        .filter-bar { margin-bottom: 15px; }
+        .filter-bar a { display: inline-block; padding: 6px 14px; margin-right: 6px; border-radius: 4px; text-decoration: none; color: #666; font-size: 13px; background: #e8e8e8; }
+        .filter-bar a.active { background: #518dfe; color: #fff; }
+        table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+        th, td { padding: 12px 14px; text-align: left; font-size: 13px; border-bottom: 1px solid #eee; }
+        th { background: #f8f9fb; font-weight: 600; color: #555; }
+        .status-tag { display: inline-block; padding: 2px 8px; border-radius: 3px; font-size: 12px; }
+        .status-active { background: #e8f5e9; color: #2e7d32; }
+        .status-transferred { background: #fff3e0; color: #e65100; }
+        .status-closed { background: #f5f5f5; color: #999; }
+        .user-info { font-weight: 500; }
+        .user-info .source { font-size: 11px; color: #999; font-weight: normal; }
+        .group-name { font-size: 11px; color: #999; }
+        .btn { display: inline-block; padding: 6px 14px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; text-decoration: none; }
+        .btn-primary { background: #518dfe; color: #fff; }
+        .btn-primary:hover { background: #3a7af5; }
+        .btn-danger { background: #ef5350; color: #fff; }
+        .btn-danger:hover { background: #e53935; }
+        .btn-outline { background: transparent; border: 1px solid #ddd; color: #666; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; }
+        .pagination { margin-top: 20px; text-align: center; }
+        .pagination a { display: inline-block; padding: 6px 12px; margin: 0 2px; border: 1px solid #ddd; border-radius: 4px; text-decoration: none; color: #666; }
+        .empty { text-align: center; padding: 60px; color: #999; }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>智云台AI客服</h2>
+        <a href="{{ url_for('admin.conversation_list') }}" class="{% if request.endpoint == 'admin.conversation_list' %}active{% endif %}">全部对话</a>
+        <a href="{{ url_for('admin.pending_list') }}" class="{% if request.endpoint == 'admin.pending_list' %}active{% endif %}">待处理</a>
+        <a href="{{ url_for('admin.active_list') }}" class="{% if request.endpoint == 'admin.active_list' %}active{% endif %}">处理中</a>
+        <a href="{{ url_for('admin.knowledge_list') }}" class="{% if request.endpoint == 'admin.knowledge_list' %}active{% endif %}">知识库</a>
+        <a href="{{ url_for('admin_config.platform_list') }}" class="{% if request.endpoint == 'admin_config.platform_list' %}active{% endif %}">平台配置</a>
+    </div>
+    <div class="main">
+        <div class="header">
+            <h1>全部对话</h1>
+        </div>
+        <div class="filter-bar">
+            <a href="{{ url_for('admin.conversation_list') }}" class="{% if not current_status %}active{% endif %}">全部</a>
+            <a href="{{ url_for('admin.conversation_list', status='active') }}" class="{% if current_status == 'active' %}active{% endif %}">AI回复中</a>
+            <a href="{{ url_for('admin.conversation_list', status='transferred') }}" class="{% if current_status == 'transferred' %}active{% endif %}">待处理</a>
+            <a href="{{ url_for('admin.conversation_list', status='closed') }}" class="{% if current_status == 'closed' %}active{% endif %}">已关闭</a>
+        </div>
+        {% if conversations %}
+        <table>
+            <thead>
+                <tr>
+                    <th>客户</th>
+                    <th>来源</th>
+                    <th>最后消息</th>
+                    <th>状态</th>
+                    <th>时间</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for conv in conversations %}
+                <tr>
+                    <td>
+                        <div class="user-info">{{ conv.user_name[:20] }}{% if conv.user_name|length > 20 %}...{% endif %}</div>
+                        {% if conv.group_name %}
+                        <div class="group-name">{{ conv.group_name[:20] }}{% if conv.group_name|length > 20 %}...{% endif %}</div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if conv.channel == 'wechat_work' %}企业微信
+                        {% elif conv.channel == 'feishu' %}飞书
+                        {% elif conv.channel == 'dingtalk' %}钉钉
+                        {% else %}{{ conv.channel }}{% endif %}
+                    </td>
+                    <td>{{ conv.last_message[:40] }}{% if conv.last_message|length > 40 %}...{% endif %}</td>
+                    <td>
+                        {% if conv.status == 'active' %}
+                        <span class="status-tag status-active">AI回复中</span>
+                        {% elif conv.status == 'transferred' %}
+                        <span class="status-tag status-transferred">待处理</span>
+                        {% else %}
+                        <span class="status-tag status-closed">已关闭</span>
+                        {% endif %}
+                    </td>
+                    <td>{{ conv.last_time.strftime('%m-%d %H:%M') }}</td>
+                    <td>
+                        <a href="{{ url_for('admin.conversation_detail', conv_id=conv.id) }}" class="btn btn-outline btn-sm">查看</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <div class="pagination">
+            {% if pagination.has_prev %}
+            <a href="{{ url_for('admin.conversation_list', page=pagination.prev_num, status=current_status) }}">上一页</a>
+            {% endif %}
+            <span>{{ pagination.page }} / {{ pagination.pages }}</span>
+            {% if pagination.has_next %}
+            <a href="{{ url_for('admin.conversation_list', page=pagination.next_num, status=current_status) }}">下一页</a>
+            {% endif %}
+        </div>
+        {% else %}
+        <div class="empty">暂无对话记录</div>
+        {% endif %}
+    </div>
+</body>
+</html>

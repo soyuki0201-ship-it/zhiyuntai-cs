@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: zhiyuntai-app
+    restart: always
+    environment:
+      - MYSQL_HOST=${MYSQL_HOST}
+      - MYSQL_PORT=${MYSQL_PORT}
+      - MYSQL_USER=${MYSQL_USER}
+      - MYSQL_PASSWORD=${MYSQL_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - WX_CORP_ID=${WX_CORP_ID}
+      - WX_AGENT_SECRET=${WX_AGENT_SECRET}
+      - WX_TOKEN=${WX_TOKEN}
+      - WX_ENCODING_AES_KEY=${WX_ENCODING_AES_KEY}
+      - WX_GROUP_ROBOT_TOKEN=${WX_GROUP_ROBOT_TOKEN}
+      - WX_GROUP_ROBOT_WEBHOOK_URL=${WX_GROUP_ROBOT_WEBHOOK_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - ADMIN_USERNAME=${ADMIN_USERNAME}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+    volumes:
+      - ./chroma_db:/app/chroma_db
+      - ./knowledge_base:/app/knowledge_base
+      - ./image_cache:/app/image_cache
+    ports:
+      - "127.0.0.1:8000:8000"
+    command: >
+      sh -c "python scripts/init_db.py &&
+             gunicorn -w 2 -b 0.0.0.0:8000 run:app"
+
+  nginx:
+    image: nginx:alpine
+    container_name: zhiyuntai-nginx
+    restart: always
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./static:/app/static:ro
+      - ./templates:/app/templates:ro
+      - certbot_data:/etc/letsencrypt
+      - certbot_www:/var/www/html
+
+volumes:
+  certbot_data:
+  certbot_www:
