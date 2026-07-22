@@ -25,6 +25,7 @@ class Config:
 
     # WeChat Work - 已迁移至数据库 platform_configs 表管理
     WX_CORP_ID = os.getenv("WX_CORP_ID", "")
+    WX_AGENT_ID = os.getenv("WX_AGENT_ID", "")
     WX_AGENT_SECRET = os.getenv("WX_AGENT_SECRET", "")
     WX_TOKEN = os.getenv("WX_TOKEN", "")
     WX_ENCODING_AES_KEY = os.getenv("WX_ENCODING_AES_KEY", "")
