@@ -3,6 +3,7 @@ version: '3.8'
 services:
   app:
     build: .
+    image: ${DOCKER_USERNAME}/zhiyuntai-cs:latest
     container_name: zhiyuntai-app
     restart: always
     environment:
@@ -46,6 +47,17 @@ services:
       - ./templates:/app/templates:ro
       - certbot_data:/etc/letsencrypt
       - certbot_www:/var/www/html
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: zhiyuntai-watchtower
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=60
+    command: zhiyuntai-app zhiyuntai-nginx
 
 volumes:
   certbot_data:

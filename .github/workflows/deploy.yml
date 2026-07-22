@@ -23,3 +23,9 @@ jobs:
         with:
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/zhiyuntai-cs:latest
+
+      - name: Deploy to server via webhook
+        run: |
+          curl -s -X POST ${{ secrets.DEPLOY_WEBHOOK_URL }} \
+            -H "Authorization: Bearer ${{ secrets.DEPLOY_TOKEN }}" \
+            --data-raw '{}' || echo "Webhook 触发失败（如未配置可忽略）"
