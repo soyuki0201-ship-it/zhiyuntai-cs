@@ -14,7 +14,7 @@ import io
 from datetime import datetime
 from functools import wraps
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify, session, Response
-from app.models.models import db, Conversation, Message, Knowledge
+from app.models.models import db, Conversation, Handoff, Message, Knowledge
 from app.services.handoff_service import HandoffService
 from app.services.knowledge_service import KnowledgeService
 from app.utils.csrf import generate_csrf_token, csrf_protected
