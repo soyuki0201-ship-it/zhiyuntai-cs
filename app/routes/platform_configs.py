@@ -27,8 +27,14 @@ def admin_required(f):
 
 @admin_config_bp.context_processor
 def inject_csrf_token():
-    """注入 CSRF Token 生成函数到所有模板"""
-    return dict(csrf_token=generate_csrf_token)
+    """注入 CSRF Token 生成函数和待处理数量到所有模板"""
+    pending_count = 0
+    try:
+        from app.services.handoff_service import HandoffService
+        pending_count = HandoffService.get_pending_count()
+    except Exception:
+        pass
+    return dict(csrf_token=generate_csrf_token, pending_count=pending_count)
 
 
 @admin_config_bp.route("/platforms")
