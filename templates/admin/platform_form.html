@@ -18,7 +18,7 @@
     {% for field in schema.fields %}
     <div class="form-group"><label>{{ field.label }}{% if field.required %}<span style="color:red">*</span>{% endif %}</label>
       <input type="{{ field.type }}" name="cfg_{{ field.key }}" value="{{ config.get_config().get(field.key, '') if config else '' }}" {% if field.required %}required{% endif %} {% if field.readonly %}readonly{% endif %} placeholder="{{ field.label }}">
-      {% if field.key == 'callback_url' %}<div class="hint">部署后自动生成</div>{% endif %}
+      {% if field.key == 'callback_url' %}<div class="hint">部署后回调地址为：https://yunzhiai-dev.ts-martech.com/api/wechat_work/callback</div>{% endif %}
       {% if field.key == 'group_robot_webhook' %}<div class="hint">可选，群聊场景需要</div>{% endif %}
     </div>
     {% endfor %}

@@ -1,5 +1,35 @@
 {% extends "admin/base.html" %}
 {% block page_title %}会话详情{% endblock %}
+{% block head_extra %}
+<script>
+function doTakeover() {
+    if (!confirm('确认接管该客户？')) return;
+    var f = new FormData();
+    f.append('user_id', '{{ conversation.user_id }}');
+    f.append('csrf_token', document.querySelector('input[name=csrf_token]').value);
+    fetch('{{ url_for("admin.takeover") }}', { method: 'POST', body: f })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+        var t = document.getElementById('toast');
+        if (t) { t.style.background = d.success ? '#323232' : '#d32f2f'; t.textContent = d.message; t.style.display = 'block'; setTimeout(function(){ t.style.display='none'; }, 3000); }
+        if (d.success) setTimeout(function(){ location.reload(); }, 800);
+    });
+}
+function doRelease() {
+    if (!confirm('确认释放该客户？')) return;
+    var f = new FormData();
+    f.append('user_id', '{{ conversation.user_id }}');
+    f.append('csrf_token', document.querySelector('input[name=csrf_token]').value);
+    fetch('{{ url_for("admin.release") }}', { method: 'POST', body: f })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+        var t = document.getElementById('toast');
+        if (t) { t.style.background = d.success ? '#323232' : '#d32f2f'; t.textContent = d.message; t.style.display = 'block'; setTimeout(function(){ t.style.display='none'; }, 3000); }
+        if (d.success) setTimeout(function(){ location.reload(); }, 800);
+    });
+}
+</script>
+{% endblock %}
 {% block content %}
 <a href="{{ url_for('admin.conversation_list') }}" style="display:inline-block;margin-bottom:16px;color:#4361ee;text-decoration:none;font-size:14px">← 返回会话列表</a>
 <div class="card"><div class="card-body">
@@ -12,18 +42,11 @@
       </div>
     </div>
     <div class="btn-group">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if is_handed_over %}
-      <form action="{{ url_for('admin.release') }}" method="POST" style="display:inline" hx-post="{{ url_for('admin.release') }}" hx-target="body" hx-swap="outerHTML" hx-confirm="确认释放该客户？">
-        <input type="hidden" name="user_id" value="{{ conversation.user_id }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-primary">释放（恢复AI回复）</button>
-      </form>
+      <button class="btn btn-primary" onclick="doRelease()">释放（恢复AI回复）</button>
     {% else %}
-      <form action="{{ url_for('admin.takeover') }}" method="POST" style="display:inline" hx-post="{{ url_for('admin.takeover') }}" hx-target="body" hx-swap="outerHTML" hx-confirm="确认接管该客户？">
-        <input type="hidden" name="user_id" value="{{ conversation.user_id }}">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-danger">接管（AI停止回复）</button>
-      </form>
+      <button class="btn btn-danger" onclick="doTakeover()">接管（AI停止回复）</button>
     {% endif %}
     </div>
   </div>

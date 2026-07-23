@@ -2,7 +2,6 @@
 {% block title %}AI配置 - 智云台AI客服{% endblock %}
 {% block page_title %}🧠 AI 配置{% endblock %}
 {% block head_extra %}
-<script src="https://unpkg.com/htmx.org@1.9.12"></script>
 <style>
 h1{font-size:22px;margin-bottom:20px}
 .model-card{border:1px solid #e8e8e8;border-radius:8px;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px}
@@ -127,6 +126,39 @@ h1{font-size:22px;margin-bottom:20px}
 </div>
 </div></div>
 
+<!-- Modal: 编辑模型 -->
+<div id="edit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1000;align-items:center;justify-content:center;padding:20px">
+<div style="background:#fff;border-radius:12px;width:560px;max-width:100%;max-height:80vh;overflow-y:auto;margin:auto;margin-top:10vh">
+<div style="padding:16px 20px;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center"><h3 style="font-size:16px">⚙️ 编辑 AI 模型</h3><button style="border:none;background:none;font-size:20px;cursor:pointer;color:#999" onclick="hideEditModal()">×</button></div>
+<div style="padding:20px">
+<form id="edit-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" id="edit-id" name="id" value="">
+    <div class="form-group"><label>模型供应商 <span style="color:red">*</span></label>
+        <select id="edit-provider" name="provider">
+            <option value="deepseek">DeepSeek</option>
+            <option value="openai">OpenAI（ChatGPT）</option>
+            <option value="qwen">通义千问（阿里云）</option>
+            <option value="kimi">Kimi（月之暗面）</option>
+            <option value="custom">自定义</option>
+        </select>
+    </div>
+    <div class="form-group"><label>API 地址 <span style="color:red">*</span></label><input id="edit-api-url" type="text" name="api_url" placeholder="https://api.xxx.com/v1/chat/completions"></div>
+    <div class="form-row">
+        <div class="form-group"><label>模型名称 <span style="color:red">*</span></label><input id="edit-model-name" type="text" name="model_name" placeholder="deepseek-chat / gpt-4o / qwen-plus"></div>
+        <div class="form-group"><label>API Key <span style="color:red">*</span></label><input id="edit-api-key" type="password" name="api_key" placeholder="留空则不修改"><div class="hint">留空表示保持原有 Key</div></div>
+    </div>
+    <div class="form-group"><label>配置名称</label><input id="edit-name" type="text" name="name" placeholder="如 通义千问-生产环境"></div>
+    <div class="form-group"><label><input id="edit-enabled" type="checkbox" name="enabled" value="1" checked> 启用</label></div>
+    <div class="form-group"><label><input id="edit-is-primary" type="checkbox" name="is_primary" value="1"> 设为主模型</label></div>
+</form>
+</div>
+<div style="padding:16px 20px;border-top:1px solid #eee;display:flex;justify-content:flex-end;gap:8px">
+    <button class="btn btn-outline" onclick="hideEditModal()">取消</button>
+    <button class="btn btn-primary" onclick="submitEdit()">保存</button>
+</div>
+</div></div>
+
 <script>
 function showToast(msg, isError) {
     var t = document.getElementById('toast');
@@ -157,7 +189,33 @@ function submitAdd() {
 }
 
 function editModel(id) {
-    showToast('编辑功能请直接在列表中操作，先删除再添加');
+    // 获取当前模型数据并填充编辑弹窗
+    fetch('/admin/ai-config/providers/' + id + '/data')
+    .then(function(r){ return r.json(); })
+    .then(function(data){
+        document.getElementById('edit-id').value = id;
+        document.getElementById('edit-name').value = data.name || '';
+        document.getElementById('edit-provider').value = data.provider || '';
+        document.getElementById('edit-model-name').value = data.model_name || '';
+        document.getElementById('edit-api-url').value = data.api_url || '';
+        document.getElementById('edit-api-key').value = '';
+        document.getElementById('edit-enabled').checked = data.enabled !== false;
+        document.getElementById('edit-is-primary').checked = data.is_primary === true;
+        document.getElementById('edit-modal').style.display = 'flex';
+    });
+}
+
+function hideEditModal() { document.getElementById('edit-modal').style.display = 'none'; }
+
+function submitEdit() {
+    var id = document.getElementById('edit-id').value;
+    var f = new FormData(document.getElementById('edit-form'));
+    fetch('/admin/ai-config/providers/' + id + '/edit', { method: 'POST', body: f })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+        if (d.success) { showToast(d.message); location.reload(); }
+        else { showToast(d.message || '保存失败', true); }
+    });
 }
 
 function deleteModel(id) {

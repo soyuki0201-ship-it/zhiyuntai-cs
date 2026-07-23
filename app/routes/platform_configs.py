@@ -153,6 +153,12 @@ def platform_delete(pid):
 @admin_required
 def platform_test(pid):
     """测试平台连接"""
+    # CSRF 验证
+    token = request.form.get("csrf_token", "")
+    from app.utils.csrf import verify_csrf_token
+    if not verify_csrf_token(token):
+        return jsonify({"success": False, "message": "CSRF token 无效或已过期"}), 403
+
     pc = PlatformConfig.query.get_or_404(pid)
     platform_cls = get_platform_class(pc.platform)
     if not platform_cls:

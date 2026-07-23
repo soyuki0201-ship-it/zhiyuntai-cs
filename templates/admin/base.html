@@ -91,7 +91,7 @@ textarea{min-height:120px;resize:vertical}
 <div class="sidebar">
   <div class="sidebar-brand"><h1>🤖 智云台AI</h1><div class="sub">智能客服管理系统</div></div>
   <nav class="sidebar-nav">
-    <a class="nav-item {% if request.endpoint == 'admin.conversation_list' %}active{% endif %}" href="{{ url_for('admin.conversation_list') }}"><span class="icon">📊</span><span>工作台</span></a>
+    <a class="nav-item {% if request.endpoint in ('admin.dashboard',) %}active{% endif %}" href="{{ url_for('admin.dashboard') }}"><span class="icon">📊</span><span>工作台</span></a>
     <a class="nav-item {% if request.endpoint in ('admin.conversation_list','admin.conversation_detail') %}active{% endif %}" href="{{ url_for('admin.conversation_list') }}"><span class="icon">💬</span><span>会话管理</span>{% if pending_count > 0 %}<span class="badge">{{ pending_count }}</span>{% endif %}</a>
     <a class="nav-item {% if request.endpoint in ('admin.pending_list',) %}active{% endif %}" href="{{ url_for('admin.pending_list') }}"><span class="icon">🔄</span><span>人工接管</span>{% if pending_count > 0 %}<span class="badge">{{ pending_count }}</span>{% endif %}</a>
     <a class="nav-item {% if request.endpoint in ('admin.knowledge_list','admin.knowledge_add','admin.knowledge_edit','admin.knowledge_import') %}active{% endif %}" href="{{ url_for('admin.knowledge_list') }}"><span class="icon">📚</span><span>知识库</span></a>

@@ -1,6 +1,21 @@
 {% extends "admin/base.html" %}
 {% block page_title %}平台配置{% endblock %}
+{% block head_extra %}
+<script>
+function testConnection(configId) {
+    var f = new FormData();
+    f.append('csrf_token', document.querySelector('input[name=csrf_token]').value);
+    fetch('/admin/platforms/' + configId + '/test', { method: 'POST', body: f })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+        var t = document.getElementById('toast');
+        if (t) { t.style.background = d.success ? '#323232' : '#d32f2f'; t.textContent = d.message; t.style.display = 'block'; setTimeout(function(){ t.style.display='none'; }, 3000); }
+    });
+}
+</script>
+{% endblock %}
 {% block content %}
+<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
 <div class="card"><div class="card-header"><h3>🔌 已接入渠道</h3><a href="{{ url_for('admin_config.platform_add') }}" class="btn btn-primary btn-sm">＋ 配置新渠道</a></div>
 {% if configs %}
 <div class="card-body" style="display:grid;gap:16px">
@@ -11,10 +26,7 @@
     <div>{% if c.enabled %}<span class="tag tag-green">● 已启用</span>{% else %}<span class="tag tag-gray">已禁用</span>{% endif %}</div>
     <div class="btn-group">
       <a href="{{ url_for('admin_config.platform_edit', pid=c.id) }}" class="btn btn-outline btn-sm">⚙️ 配置</a>
-      <form action="{{ url_for('admin_config.platform_test', pid=c.id) }}" method="POST" style="display:inline" hx-post="{{ url_for('admin_config.platform_test', pid=c.id) }}" hx-target="#test-result" hx-swap="innerHTML">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        <button type="submit" class="btn btn-outline btn-sm">📡 测试连接</button>
-      </form>
+      <button class="btn btn-outline btn-sm" onclick="testConnection({{ c.id }})">📡 测试连接</button>
       <form action="{{ url_for('admin_config.platform_delete', pid=c.id) }}" method="POST" style="display:inline" onsubmit="return confirm('确认删除？')">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-danger btn-sm">删除</button>
@@ -26,6 +38,5 @@
 {% else %}
 <div class="card-body"><div class="empty-state">暂无平台配置，请点击"配置新渠道"添加</div></div>
 {% endif %}
-<div id="test-result"></div>
 </div>
 {% endblock %}

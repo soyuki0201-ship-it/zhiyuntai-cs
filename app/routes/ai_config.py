@@ -121,6 +121,12 @@ def ai_provider_delete(pid):
 @admin_required
 def ai_provider_test(pid):
     """测试AI模型连接"""
+    # CSRF 验证
+    token = request.form.get("csrf_token", "")
+    from app.utils.csrf import verify_csrf_token
+    if not verify_csrf_token(token):
+        return jsonify({"success": False, "message": "CSRF token 无效或已过期"}), 403
+
     p = AIProvider.query.get_or_404(pid)
     try:
         from app.services.ai_service import test_provider_connection
@@ -130,6 +136,23 @@ def ai_provider_test(pid):
         return jsonify(result)
     except Exception as e:
         return jsonify({"success": False, "message": str(e)})
+
+
+@ai_config_bp.route("/ai-config/providers/<int:pid>/data")
+@admin_required
+def ai_provider_data(pid):
+    """获取单个AI模型配置数据（用于编辑弹窗回显）"""
+    p = AIProvider.query.get_or_404(pid)
+    return jsonify({
+        "id": p.id,
+        "name": p.name,
+        "provider": p.provider,
+        "model_name": p.model_name,
+        "api_url": p.api_url,
+        "is_primary": p.is_primary,
+        "enabled": p.enabled,
+        "sort_order": p.sort_order,
+    })
 
 
 @ai_config_bp.route("/ai-config/providers/<int:pid>/set-primary", methods=["POST"])

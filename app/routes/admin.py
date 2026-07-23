@@ -184,11 +184,18 @@ def knowledge_list():
         total = len(items)
     else:
         items, total = KnowledgeService.list_all(page=page, per_page=20)
-    return render_template("admin/knowledge_list.html", knowledge_list=items, knowledge_total=total)
+
+    # 本月新增统计
+    from datetime import datetime, timedelta
+    month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    monthly_new = Knowledge.query.filter(Knowledge.created_at >= month_start).count()
+
+    return render_template("admin/knowledge_list.html", knowledge_list=items, knowledge_total=total, monthly_new=monthly_new)
 
 
 @admin_bp.route("/knowledge/add", methods=["GET", "POST"])
 @admin_required
+@csrf_protected
 def knowledge_add():
     if request.method == "POST":
         title = request.form.get("title", "")
@@ -204,6 +211,7 @@ def knowledge_add():
 
 @admin_bp.route("/knowledge/<int:kid>/edit", methods=["GET", "POST"])
 @admin_required
+@csrf_protected
 def knowledge_edit(kid):
     knowledge = Knowledge.query.get_or_404(kid)
     if request.method == "POST":
@@ -234,6 +242,12 @@ VALID_CATEGORIES = {"产品功能介绍", "产品常见问题", "产品使用教
 def knowledge_import():
     """知识库批量导入页面"""
     if request.method == "POST":
+        # CSRF 验证（因为前端用 fetch + FormData 提交）
+        token = request.form.get("csrf_token", "")
+        from app.utils.csrf import verify_csrf_token
+        if not verify_csrf_token(token):
+            return jsonify({"success": False, "message": "CSRF token 无效或已过期"}), 403
+
         file = request.files.get("file", None)
         if not file or not file.filename:
             return jsonify({"success": False, "message": "请选择要上传的 CSV 文件"})
