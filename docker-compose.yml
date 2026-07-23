@@ -19,6 +19,7 @@ services:
     volumes:
       - ./chroma_db:/app/chroma_db
       - ./image_cache:/app/image_cache
+      - ./model_cache:/root/.cache/huggingface
     ports:
       - "127.0.0.1:8000:8000"
     command: >

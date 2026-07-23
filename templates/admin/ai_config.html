@@ -14,6 +14,11 @@ h1{font-size:22px;margin-bottom:20px}
 .add-model-card:hover{border-color:#518dfe}
 .add-model-card span{color:#518dfe;font-size:14px}
 .alert-info{padding:12px 16px;background:#e3f2fd;border:1px solid #90caf9;border-radius:6px;font-size:13px;color:#1565c0;margin-top:12px}
+.test-result-bar{display:flex;gap:8px;flex-wrap:wrap;padding:8px 0}
+.test-result-item{padding:4px 12px;border-radius:4px;font-size:12px}
+.test-result-item.ok{background:#f6ffed;color:#52c41a;border:1px solid #b7eb8f}
+.test-result-item.fail{background:#fff2f0;color:#ef5350;border:1px solid #ffccc7}
+.test-result-item.wait{background:#fffbe6;color:#faad14;border:1px solid #ffe58f}
 </style>
 {% endblock %}
 {% block content %}
@@ -27,6 +32,7 @@ h1{font-size:22px;margin-bottom:20px}
 </div>
 </div>
 <div class="card-body" id="provider-list">
+<div id="testAllResult" style="display:none" class="test-result-bar"></div>
 {% if providers %}
     {% for p in providers %}
     <div class="model-card {% if p.is_primary %}primary{% endif %}">
@@ -40,6 +46,8 @@ h1{font-size:22px;margin-bottom:20px}
             {% if not p.is_primary %}
             <button class="btn btn-outline btn-sm" onclick="setPrimary({{ p.id }})">⭐ 主模型</button>
             {% endif %}
+            <button class="btn btn-outline btn-sm" onclick="toggleModel({{ p.id }})">{% if p.enabled %}⏸ 停用{% else %}▶ 启用{% endif %}</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteModel({{ p.id }})">🗑 删除</button>
         </div>
     </div>
     {% endfor %}
@@ -174,22 +182,26 @@ function getCsrfToken() {
     return el ? el.value : '';
 }
 
+function _loading(btn, text) { if (btn) { btn.disabled = true; btn.textContent = text; } }
+function _done(btn, text) { if (btn) { btn.disabled = false; btn.textContent = text; } }
+
 function showAddModal() { document.getElementById('add-modal').style.display = 'flex'; }
 function hideAddModal() { document.getElementById('add-modal').style.display = 'none'; }
 
 function submitAdd() {
+    var btn = document.querySelector('#add-modal .btn-primary');
+    _loading(btn, '⏳ 添加中...');
     var form = document.getElementById('add-form');
     var data = new FormData(form);
     fetch('/admin/ai-config/providers/add', { method: 'POST', body: data })
     .then(function(r) { return r.json(); })
     .then(function(d) {
         if (d.success) { showToast(d.message); location.reload(); }
-        else { showToast(d.message || '添加失败', true); }
-    });
+        else { showToast(d.message || '添加失败', true); _done(btn, '添加'); }
+    }).catch(function(){ _done(btn, '添加'); });
 }
 
 function editModel(id) {
-    // 获取当前模型数据并填充编辑弹窗
     fetch('/admin/ai-config/providers/' + id + '/data')
     .then(function(r){ return r.json(); })
     .then(function(data){
@@ -208,14 +220,16 @@ function editModel(id) {
 function hideEditModal() { document.getElementById('edit-modal').style.display = 'none'; }
 
 function submitEdit() {
+    var btn = document.querySelector('#edit-modal .btn-primary');
+    _loading(btn, '⏳ 保存中...');
     var id = document.getElementById('edit-id').value;
     var f = new FormData(document.getElementById('edit-form'));
     fetch('/admin/ai-config/providers/' + id + '/edit', { method: 'POST', body: f })
     .then(function(r){ return r.json(); })
     .then(function(d){
         if (d.success) { showToast(d.message); location.reload(); }
-        else { showToast(d.message || '保存失败', true); }
-    });
+        else { showToast(d.message || '保存失败', true); _done(btn, '保存'); }
+    }).catch(function(){ _done(btn, '保存'); });
 }
 
 function deleteModel(id) {
@@ -228,20 +242,35 @@ function deleteModel(id) {
 }
 
 function testModel(id) {
+    var btn = event && event.target;
+    _loading(btn, '⏳ 测试中...');
     var f = new FormData();
     f.append('csrf_token', getCsrfToken());
     fetch('/admin/ai-config/providers/' + id + '/test', { method: 'POST', body: f })
     .then(function(r) { return r.json(); })
-    .then(function(d) { showToast(d.message, !d.success); });
+    .then(function(d) {
+        showToast(d.message, !d.success);
+        _done(btn, '📡 测试');
+    }).catch(function(){ _done(btn, '📡 测试'); });
 }
 
 function testAllModels() {
     showToast('正在测试所有已启用模型...');
-    var ids = [];
+    var ids = [], names = [];
     {% for p in providers %}
-    ids.push({{ p.id }});
+    ids.push({{ p.id }}); names.push('{{ p.name }}');
     {% endfor %}
     if (ids.length === 0) { showToast('暂无模型可测试', true); return; }
+    var bar = document.getElementById('testAllResult');
+    bar.style.display = 'flex';
+    bar.innerHTML = '';
+    ids.forEach(function(id, i){
+      var el = document.createElement('span');
+      el.className = 'test-result-item wait';
+      el.id = 'test-result-' + id;
+      el.textContent = '⏳ ' + names[i];
+      bar.appendChild(el);
+    });
     var pending = ids.length;
     var token = getCsrfToken();
     ids.forEach(function(id) {
@@ -251,12 +280,16 @@ function testAllModels() {
         .then(function(r) { return r.json(); })
         .then(function(d) {
             pending--;
+            var el = document.getElementById('test-result-' + id);
+            if (el) { el.className = 'test-result-item ' + (d.success ? 'ok' : 'fail'); el.textContent = (d.success ? '✅ ' : '❌ ') + el.textContent.slice(2); }
             if (pending === 0) showToast('全部模型测试完成');
         });
     });
 }
 
 function setPrimary(id) {
+    var btn = event && event.target;
+    _loading(btn, '⏳ 设置中...');
     var f = new FormData();
     f.append('csrf_token', getCsrfToken());
     fetch('/admin/ai-config/providers/' + id + '/set-primary', { method: 'POST', body: f })
@@ -264,7 +297,19 @@ function setPrimary(id) {
     .then(function(d) { showToast(d.message); location.reload(); });
 }
 
+function toggleModel(id) {
+    var btn = event && event.target;
+    _loading(btn, '⏳ 处理中...');
+    var f = new FormData();
+    f.append('csrf_token', getCsrfToken());
+    fetch('/admin/ai-config/providers/' + id + '/toggle', { method: 'POST', body: f })
+    .then(function(r) { return r.json(); })
+    .then(function(d) { showToast(d.message); location.reload(); });
+}
+
 function saveConfig() {
+    var btn = document.querySelector('#config-form .btn-outline');
+    _loading(btn, '⏳ 保存中...');
     var form = document.getElementById('config-form');
     var data = new FormData(form);
     data.append('system_prompt', document.querySelector('[name=system_prompt]').value);
@@ -273,26 +318,30 @@ function saveConfig() {
     data.append('rag_similarity_threshold', document.getElementById('rag_similarity_threshold').value);
     fetch('/admin/ai-config/config', { method: 'POST', body: data })
     .then(function(r) { return r.json(); })
-    .then(function(d) { showToast(d.message); });
+    .then(function(d) { showToast(d.message); _done(btn, '💾 保存对话参数'); });
 }
 
 function savePrompt() {
+    var btn = event && event.target;
+    _loading(btn, '⏳ 保存中...');
     var f = new FormData();
     f.append('csrf_token', getCsrfToken());
     f.append('system_prompt', document.querySelector('[name=system_prompt]').value);
     fetch('/admin/ai-config/config', { method: 'POST', body: f })
     .then(function(r) { return r.json(); })
-    .then(function(d) { showToast(d.message); });
+    .then(function(d) { showToast(d.message); _done(btn, '💾 保存提示词'); });
 }
 
 function saveRag() {
+    var btn = event && event.target;
+    _loading(btn, '⏳ 保存中...');
     var f = new FormData();
     f.append('csrf_token', getCsrfToken());
     f.append('rag_top_k', document.getElementById('rag_top_k').value);
     f.append('rag_similarity_threshold', document.getElementById('rag_similarity_threshold').value);
     fetch('/admin/ai-config/config', { method: 'POST', body: f })
     .then(function(r) { return r.json(); })
-    .then(function(d) { showToast(d.message); });
+    .then(function(d) { showToast(d.message); _done(btn, '💾 保存 RAG 配置'); });
 }
 </script>
 

@@ -180,17 +180,16 @@ def knowledge_list():
     page = request.args.get("page", 1, type=int)
     search_query = request.args.get("q", "").strip()
     if search_query:
-        items = KnowledgeService.search_by_title(search_query)
-        total = len(items)
+        items, total, pagination = KnowledgeService.search_by_title(search_query, page=page, per_page=20)
     else:
-        items, total = KnowledgeService.list_all(page=page, per_page=20)
+        items, total, pagination = KnowledgeService.list_all(page=page, per_page=20)
 
     # 本月新增统计
     from datetime import datetime, timedelta
     month_start = datetime.utcnow().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     monthly_new = Knowledge.query.filter(Knowledge.created_at >= month_start).count()
 
-    return render_template("admin/knowledge_list.html", knowledge_list=items, knowledge_total=total, monthly_new=monthly_new)
+    return render_template("admin/knowledge_list.html", knowledge_list=items, knowledge_total=total, monthly_new=monthly_new, search_query=search_query, page=page, pagination=pagination)
 
 
 @admin_bp.route("/knowledge/add", methods=["GET", "POST"])
@@ -335,3 +334,27 @@ def settings_page():
         conversation_ttl=current_app.config.get("CONVERSATION_TTL_DAYS", 30),
         handoff_timeout=current_app.config.get("HANDOFF_TIMEOUT_MINUTES", 30),
     )
+
+
+@admin_bp.route("/settings/save", methods=["POST"])
+@admin_required
+@csrf_protected
+def settings_save():
+    """保存系统设置"""
+    from flask import current_app
+    conversation_ttl = request.form.get("conversation_ttl", "").strip()
+    handoff_timeout = request.form.get("handoff_timeout", "").strip()
+
+    if conversation_ttl:
+        try:
+            current_app.config["CONVERSATION_TTL_DAYS"] = int(conversation_ttl)
+        except ValueError:
+            return jsonify({"success": True, "message": "对话保留天数格式无效，保留原值"})
+
+    if handoff_timeout:
+        try:
+            current_app.config["HANDOFF_TIMEOUT_MINUTES"] = int(handoff_timeout)
+        except ValueError:
+            return jsonify({"success": True, "message": "接管超时时间格式无效，保留原值"})
+
+    return jsonify({"success": True, "message": "设置已保存（重启后重新加载 .env 变更）"})

@@ -2,8 +2,10 @@
 {% block page_title %}会话详情{% endblock %}
 {% block head_extra %}
 <script>
-function doTakeover() {
+function _btn(el) { return el.tagName === 'BUTTON' ? el : el.querySelector('button'); }
+function doTakeover(btn) {
     if (!confirm('确认接管该客户？')) return;
+    btn = _btn(btn); btn.disabled = true; btn.textContent = '⏳ 接管中...';
     var f = new FormData();
     f.append('user_id', '{{ conversation.user_id }}');
     f.append('csrf_token', document.querySelector('input[name=csrf_token]').value);
@@ -13,10 +15,12 @@ function doTakeover() {
         var t = document.getElementById('toast');
         if (t) { t.style.background = d.success ? '#323232' : '#d32f2f'; t.textContent = d.message; t.style.display = 'block'; setTimeout(function(){ t.style.display='none'; }, 3000); }
         if (d.success) setTimeout(function(){ location.reload(); }, 800);
+        else { btn.disabled = false; btn.textContent = '接管（AI停止回复）'; }
     });
 }
-function doRelease() {
+function doRelease(btn) {
     if (!confirm('确认释放该客户？')) return;
+    btn = _btn(btn); btn.disabled = true; btn.textContent = '⏳ 释放中...';
     var f = new FormData();
     f.append('user_id', '{{ conversation.user_id }}');
     f.append('csrf_token', document.querySelector('input[name=csrf_token]').value);
@@ -26,12 +30,13 @@ function doRelease() {
         var t = document.getElementById('toast');
         if (t) { t.style.background = d.success ? '#323232' : '#d32f2f'; t.textContent = d.message; t.style.display = 'block'; setTimeout(function(){ t.style.display='none'; }, 3000); }
         if (d.success) setTimeout(function(){ location.reload(); }, 800);
+        else { btn.disabled = false; btn.textContent = '释放（恢复AI回复）'; }
     });
 }
 </script>
 {% endblock %}
 {% block content %}
-<a href="{{ url_for('admin.conversation_list') }}" style="display:inline-block;margin-bottom:16px;color:#4361ee;text-decoration:none;font-size:14px">← 返回会话列表</a>
+<a href="{% if request.args.get('from') == 'pending' %}{{ url_for('admin.pending_list') }}{% else %}{{ url_for('admin.conversation_list') }}{% endif %}" style="display:inline-block;margin-bottom:16px;color:#4361ee;text-decoration:none;font-size:14px">← 返回{{ '待处理' if request.args.get('from') == 'pending' else '会话列表' }}</a>
 <div class="card"><div class="card-body">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:12px">
     <div>
@@ -44,9 +49,9 @@ function doRelease() {
     <div class="btn-group">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if is_handed_over %}
-      <button class="btn btn-primary" onclick="doRelease()">释放（恢复AI回复）</button>
+      <button class="btn btn-primary" onclick="doRelease(this)">释放（恢复AI回复）</button>
     {% else %}
-      <button class="btn btn-danger" onclick="doTakeover()">接管（AI停止回复）</button>
+      <button class="btn btn-danger" onclick="doTakeover(this)">接管（AI停止回复）</button>
     {% endif %}
     </div>
   </div>

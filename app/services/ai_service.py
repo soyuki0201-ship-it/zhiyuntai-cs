@@ -6,7 +6,6 @@
 import json
 import logging
 import requests
-from flask import current_app
 
 logger = logging.getLogger(__name__)
 
@@ -15,16 +14,7 @@ class AIService:
     """AI 对话服务（从数据库读取模型配置）"""
 
     def __init__(self, app=None):
-        self.api_key = None
-        self.api_url = None
-        self.model_name = "deepseek-chat"
-        if app:
-            self.init_app(app)
-
-    def init_app(self, app):
-        self.api_key = app.config.get("DEEPSEEK_API_KEY", "")
-        self.api_url = app.config.get("DEEPSEEK_API_URL", "")
-        self.model_name = "deepseek-chat"
+        pass
 
     def chat(self, messages: list[dict], temperature: float = None) -> str:
         """调用 AI API 生成回复（从数据库读取主模型配置和参数）
@@ -39,7 +29,7 @@ class AIService:
         api_url, api_key, model_name, cfg_temperature, max_tokens = self._get_provider_config()
         temperature = temperature if temperature is not None else cfg_temperature
 
-        if not api_key:
+        if not api_url or not api_key:
             logger.warning("AI 模型未配置，返回占位回复")
             return "【AI服务未配置，请在管理后台 AI 配置中添加模型】"
 
@@ -55,7 +45,7 @@ class AIService:
                         or AIProvider.query.filter_by(enabled=True).order_by(AIProvider.sort_order).first())
             if provider:
                 decrypted = _decrypt_json(provider.api_key)
-                api_key = decrypted.get("key", provider.api_key)
+                api_key = decrypted.get("key", "")
                 # 从 AIConfig 读取 temperature 和 max_tokens
                 ai_config = AIConfig.query.first()
                 cfg_temp = ai_config.temperature if ai_config else 0.7
@@ -64,8 +54,8 @@ class AIService:
         except Exception:
             pass
 
-        # 回退：使用 config.py 中的 DeepSeek 配置
-        return self.api_url, self.api_key, self.model_name, 0.7, 2000
+        # 无数据库配置时返回空，由 chat() 输出提示
+        return "", "", "", 0.7, 2000
 
     def _call_api(self, api_url: str, api_key: str, model_name: str,
                   messages: list[dict], temperature: float, max_tokens: int = 2000) -> str:

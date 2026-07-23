@@ -19,12 +19,12 @@
       <div><div style="font-weight:500">上传填写好的 CSV 文件</div><div style="font-size:12px;color:#999;margin-top:2px">支持 UTF-8 with BOM 编码，单次建议不超过 500 行</div></div>
     </div>
   </div>
-  <div id="dropZone" style="border:2px dashed #d9d9d9;border-radius:8px;padding:32px;text-align:center;margin-top:16px;cursor:pointer" onclick="document.getElementById('file-input').click()">
+  <div id="dropZone" style="border:2px dashed #d9d9d9;border-radius:8px;padding:32px;text-align:center;margin-top:16px;cursor:pointer">
     <div style="font-size:36px;color:#4361ee">📤</div>
     <div style="font-weight:500;color:#4361ee;margin-top:8px" id="uploadLabel">点击或拖拽 CSV 文件到此处</div>
     <div style="font-size:12px;color:#999;margin-top:4px">仅支持 .csv 格式</div>
   </div>
-  <input type="file" id="file-input" accept=".csv" style="display:none" onchange="document.getElementById('uploadLabel').textContent='已选择：'+this.files[0].name">
+  <input type="file" id="file-input" accept=".csv" style="display:none">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <div style="display:flex;gap:8px;margin-top:16px;align-items:center">
     <a href="{{ url_for('admin.knowledge_import_template') }}" class="btn btn-outline">📥 下载模板</a>
@@ -34,16 +34,54 @@
 </div></div>
 
 <script>
+(function(){
+  var dropZone = document.getElementById('dropZone');
+  var fileInput = document.getElementById('file-input');
+  var uploadLabel = document.getElementById('uploadLabel');
+
+  // 点击上传
+  dropZone.addEventListener('click', function(){ fileInput.click(); });
+
+  // 选择文件
+  fileInput.addEventListener('change', function(){
+    if (fileInput.files.length) uploadLabel.textContent = '已选择：' + fileInput.files[0].name;
+  });
+
+  // 拖拽上传
+  dropZone.addEventListener('dragover', function(e){
+    e.preventDefault();
+    dropZone.style.borderColor = '#4361ee';
+    dropZone.style.background = '#f0f3ff';
+  });
+  dropZone.addEventListener('dragleave', function(){
+    dropZone.style.borderColor = '#d9d9d9';
+    dropZone.style.background = '';
+  });
+  dropZone.addEventListener('drop', function(e){
+    e.preventDefault();
+    dropZone.style.borderColor = '#d9d9d9';
+    dropZone.style.background = '';
+    if (e.dataTransfer.files.length) {
+      fileInput.files = e.dataTransfer.files;
+      uploadLabel.textContent = '已选择：' + fileInput.files[0].name;
+    }
+  });
+})();
+
+var importing = false;
 function doImport() {
+  if (importing) return;
   var input = document.getElementById('file-input');
-  if (!input.files.length) { alert('请先选择 CSV 文件'); return; }
+  if (!input.files.length) { showToast('请先选择 CSV 文件', true); return; }
   var fd = new FormData();
   fd.append('file', input.files[0]);
   fd.append('csrf_token', document.querySelector('input[name="csrf_token"]').value);
   var btn = document.getElementById('btnImport');
+  importing = true;
   btn.disabled = true; btn.textContent = '⏳ 导入中...';
-  document.getElementById('result').style.display = 'block';
-  document.getElementById('result').innerHTML = '<div style="text-align:center;padding:20px;color:#999">⏳ 正在导入，请稍候...</div>';
+  var resultDiv = document.getElementById('result');
+  resultDiv.style.display = 'block';
+  resultDiv.innerHTML = '<div style="text-align:center;padding:20px;color:#999">⏳ 正在导入，请稍候...</div>';
   fetch('{{ url_for("admin.knowledge_import") }}', { method: 'POST', body: fd })
   .then(function(r){return r.json()})
   .then(function(d){
@@ -61,7 +99,17 @@ function doImport() {
     }
   }).catch(function(e){
     document.getElementById('result').innerHTML = '<div style="color:#ef5350">❌ 网络错误：'+e.message+'</div>';
-  }).finally(function(){ btn.disabled = false; btn.textContent = '📤 上传并导入'; });
+    showToast('导入失败：'+e.message, true);
+  }).finally(function(){ importing = false; btn.disabled = false; btn.textContent = '📤 上传并导入'; });
+}
+
+function showToast(msg, isError) {
+  var t = document.getElementById('toast');
+  if (!t) return;
+  t.style.background = isError ? '#d32f2f' : '#323232';
+  t.textContent = msg;
+  t.style.display = 'block';
+  setTimeout(function(){ t.style.display = 'none'; }, 3000);
 }
 </script>
 {% endblock %}

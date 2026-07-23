@@ -2,8 +2,9 @@
 {% block page_title %}人工接管{% endblock %}
 {% block head_extra %}
 <script>
-function doTakeover(userId) {
+function doTakeover(btn, userId) {
     if (!confirm('确认接管该客户？')) return;
+    btn.disabled = true; btn.textContent = '⏳ 接管中...';
     var f = new FormData();
     f.append('user_id', userId);
     f.append('csrf_token', document.querySelector('input[name=csrf_token]').value);
@@ -13,10 +14,12 @@ function doTakeover(userId) {
         var t = document.getElementById('toast');
         if (t) { t.style.background = d.success ? '#323232' : '#d32f2f'; t.textContent = d.message; t.style.display = 'block'; setTimeout(function(){ t.style.display='none'; }, 3000); }
         if (d.success) setTimeout(function(){ location.reload(); }, 800);
+        else { btn.disabled = false; btn.textContent = '✋ 接管'; }
     });
 }
-function doRelease(userId) {
+function doRelease(btn, userId) {
     if (!confirm('确认释放该客户？')) return;
+    btn.disabled = true; btn.textContent = '⏳ 释放中...';
     var f = new FormData();
     f.append('user_id', userId);
     f.append('csrf_token', document.querySelector('input[name=csrf_token]').value);
@@ -26,6 +29,7 @@ function doRelease(userId) {
         var t = document.getElementById('toast');
         if (t) { t.style.background = d.success ? '#323232' : '#d32f2f'; t.textContent = d.message; t.style.display = 'block'; setTimeout(function(){ t.style.display='none'; }, 3000); }
         if (d.success) setTimeout(function(){ location.reload(); }, 800);
+        else { btn.disabled = false; btn.textContent = '✅ 释放'; }
     });
 }
 </script>
@@ -45,8 +49,8 @@ function doRelease(userId) {
     <tr><td>{{ conv.user_name[:20] }}</td><td><span class="tag tag-blue">{% if conv.channel == 'wechat_work' %}企微{% elif conv.channel == 'feishu' %}飞书{% else %}{{ conv.channel }}{% endif %}</span></td><td>{{ conv.last_message[:50] }}</td><td style="white-space:nowrap">{{ conv.last_time.strftime('%m-%d %H:%M') }}</td>
     <td class="btn-group">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button class="btn btn-primary btn-sm" onclick="doTakeover('{{ conv.user_id }}')">✋ 接管</button>
-      <a href="{{ url_for('admin.conversation_detail', conv_id=conv.id) }}" class="btn btn-outline btn-sm">查看</a>
+      <button class="btn btn-primary btn-sm" onclick="doTakeover(this,'{{ conv.user_id }}')">✋ 接管</button>
+      <a href="{{ url_for('admin.conversation_detail', conv_id=conv.id, from='pending') }}" class="btn btn-outline btn-sm">查看</a>
     </td></tr>
   {% endfor %}
   </tbody>
@@ -62,7 +66,7 @@ function doRelease(userId) {
   {% for h in handoffs %}
     <tr><td>{{ h.user_name or h.user_id[:20] }}</td><td><span class="tag tag-blue">{% if h.channel == 'wechat_work' %}企微{% elif h.channel == 'feishu' %}飞书{% else %}{{ h.channel }}{% endif %}</span></td><td>{{ h.handled_by or '未指定' }}</td><td>{{ h.taken_at.strftime('%H:%M') }}</td>
     <td>
-      <button class="btn btn-success btn-sm" onclick="doRelease('{{ h.user_id }}')">✅ 释放</button>
+      <button class="btn btn-success btn-sm" onclick="doRelease(this,'{{ h.user_id }}')">✅ 释放</button>
     </td></tr>
   {% endfor %}
   </tbody>

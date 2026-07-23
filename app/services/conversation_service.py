@@ -108,7 +108,13 @@ def _save_message(conversation_id: int, role: str, content: str, msg_type: str, 
 
 def get_conversation_history(conversation_id: int, max_rounds: int = None) -> list[dict]:
     if max_rounds is None:
-        max_rounds = current_app.config.get("MAX_HISTORY_ROUNDS", 10)
+        # 优先从 AIConfig 表读取，兜底使用 config.py 默认值
+        try:
+            from app.models.models import AIConfig
+            ai_config = AIConfig.query.first()
+            max_rounds = ai_config.max_history_rounds if ai_config else current_app.config.get("MAX_HISTORY_ROUNDS", 10)
+        except Exception:
+            max_rounds = current_app.config.get("MAX_HISTORY_ROUNDS", 10)
     msgs = Message.query.filter(
         Message.conversation_id == conversation_id,
         Message.role.in_(["user", "assistant"]),

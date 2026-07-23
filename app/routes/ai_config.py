@@ -167,6 +167,18 @@ def ai_provider_set_primary(pid):
     return jsonify({"success": True, "message": f"已设 {p.name} 为主模型"})
 
 
+@ai_config_bp.route("/ai-config/providers/<int:pid>/toggle", methods=["POST"])
+@admin_required
+@csrf_protected
+def ai_provider_toggle(pid):
+    """切换模型启用/禁用状态"""
+    p = AIProvider.query.get_or_404(pid)
+    p.enabled = not p.enabled
+    db.session.commit()
+    status = "已启用" if p.enabled else "已禁用"
+    return jsonify({"success": True, "message": f"{p.name} {status}"})
+
+
 # ---- AI System Config ----
 
 @ai_config_bp.route("/ai-config/config", methods=["POST"])

@@ -105,29 +105,48 @@ class KnowledgeService:
         return True
 
     @staticmethod
-    def search(query: str, top_k: int = 5) -> list[dict]:
-        """搜索知识库"""
-        return search_knowledge(query, top_k=top_k)
+    def search(query: str, top_k: int = None) -> list[dict]:
+        """搜索知识库（优先从 AIConfig 读取 top_k 和 threshold）"""
+        if top_k is None:
+            try:
+                from app.models.models import AIConfig
+                cfg = AIConfig.query.first()
+                top_k = cfg.rag_top_k if cfg else 5
+            except Exception:
+                top_k = 5
+        try:
+            from app.models.models import AIConfig
+            cfg = AIConfig.query.first()
+            threshold = cfg.rag_similarity_threshold if cfg else 0.6
+        except Exception:
+            threshold = 0.6
+        return search_knowledge(query, top_k=top_k, threshold=threshold)
 
     @staticmethod
-    def search_by_title(query: str) -> list:
-        """按标题搜索知识条目"""
-        if not query or not query.strip():
-            return Knowledge.query.order_by(Knowledge.updated_at.desc()).all()
-        pattern = f"%{query.strip()}%"
-        return Knowledge.query.filter(Knowledge.title.like(pattern)).order_by(Knowledge.updated_at.desc()).all()
+    def search_by_title(query: str, page: int = 1, per_page: int = 20) -> tuple:
+        """按标题搜索知识条目（支持分页）
+
+        Returns:
+            tuple: (知识列表, 总条数, pagination对象)
+        """
+        query_obj = Knowledge.query
+        if query and query.strip():
+            pattern = f"%{query.strip()}%"
+            query_obj = query_obj.filter(Knowledge.title.like(pattern))
+        pagination = query_obj.order_by(Knowledge.updated_at.desc()).paginate(page=page, per_page=per_page, error_out=False)
+        return pagination.items, pagination.total, pagination
 
     @staticmethod
     def list_all(page: int = 1, per_page: int = 20) -> tuple:
         """获取知识列表（分页）
 
         Returns:
-            tuple: (知识列表, 总条数)
+            tuple: (知识列表, 总条数, pagination对象)
         """
         pagination = Knowledge.query.order_by(
             Knowledge.updated_at.desc()
         ).paginate(page=page, per_page=per_page, error_out=False)
-        return pagination.items, pagination.total
+        return pagination.items, pagination.total, pagination
 
 
 def _chunk_text(text: str, max_chunk_size: int = 500) -> list[str]:

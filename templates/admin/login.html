@@ -28,6 +28,7 @@
         <div class="error">{{ error }}</div>
         {% endif %}
         <form method="POST">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label>用户名</label>
                 <input type="text" name="username" required placeholder="请输入管理员用户名">

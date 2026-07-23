@@ -28,5 +28,6 @@ Thumbs.db
 access_token.json
 chroma_db/
 image_cache/
+model_cache/
 knowledge_base/
 venv/

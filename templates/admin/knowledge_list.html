@@ -13,9 +13,10 @@
     </div>
   </div>
   <div style="padding:12px 16px;display:flex;gap:8px;border-bottom:1px solid #f0f0f0;flex-wrap:wrap">
-    <form method="GET" action="{{ url_for('admin.knowledge_list') }}" style="display:flex;gap:8px">
-      <input type="text" name="q" placeholder="搜索知识标题..." style="max-width:220px;padding:6px 10px;font-size:13px" value="{{ request.args.get('q', '') }}">
+    <form method="GET" action="{{ url_for('admin.knowledge_list') }}" style="display:flex;gap:8px" onsubmit="var s=this.querySelector('button[type=submit]');s.disabled=true;s.textContent='⏳ 搜索中...'">
+      <input type="text" name="q" placeholder="搜索知识标题..." style="max-width:220px;padding:6px 10px;font-size:13px" value="{{ request.args.get('q', '') }}" autocomplete="off">
       <button type="submit" class="btn btn-outline btn-sm">🔍 搜索</button>
+      {% if search_query %}<a href="{{ url_for('admin.knowledge_list') }}" class="btn btn-outline btn-sm">✕ 清除</a>{% endif %}
     </form>
   </div>
   {% if knowledge_list %}
@@ -38,6 +39,29 @@
     </tr>
     {% endfor %}
     </tbody></table></div>
+  {% if pagination and pagination.pages > 1 %}
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-top:1px solid #f0f0f0;gap:12px">
+    <div style="font-size:13px;color:#999">共 {{ pagination.total }} 条 · 第 {{ pagination.page }}/{{ pagination.pages }} 页</div>
+    <div class="btn-group">
+      {% if pagination.has_prev %}
+      <a class="btn btn-outline btn-sm" href="{{ url_for('admin.knowledge_list', page=pagination.prev_num, q=request.args.get('q', '') if request.args.get('q') else None) }}">← 上一页</a>
+      {% endif %}
+      {% for n in range(pagination.pages) %}
+        {% set num = n + 1 %}
+        {% if num == pagination.page %}
+        <span class="btn btn-primary btn-sm" style="cursor:default">{{ num }}</span>
+        {% elif num == 1 or num == pagination.pages or (num >= pagination.page - 2 and num <= pagination.page + 2) %}
+        <a class="btn btn-outline btn-sm" href="{{ url_for('admin.knowledge_list', page=num, q=request.args.get('q', '') if request.args.get('q') else None) }}">{{ num }}</a>
+        {% elif num == pagination.page - 3 or num == pagination.page + 3 %}
+        <span style="padding:4px 4px;color:#999">…</span>
+        {% endif %}
+      {% endfor %}
+      {% if pagination.has_next %}
+      <a class="btn btn-outline btn-sm" href="{{ url_for('admin.knowledge_list', page=pagination.next_num, q=request.args.get('q', '') if request.args.get('q') else None) }}">下一页 →</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
   {% else %}
   <div class="empty-state">暂无知识库内容，请点击"新增知识"添加</div>
   {% endif %}

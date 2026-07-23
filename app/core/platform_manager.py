@@ -42,35 +42,6 @@ def get_platform(platform_type: str) -> PlatformInterface | None:
     return None
 
 
-def get_platforms(platform_type: str) -> list[PlatformInterface]:
-    """获取指定类型的所有平台实例"""
-    return list(_platforms.get(platform_type, []))
-
-
-def get_all_platforms() -> dict[str, list[PlatformInterface]]:
-    """获取所有已注册的平台（按类型分组）"""
-    return dict(_platforms)
-
-
-def get_enabled_platforms() -> list[PlatformInterface]:
-    """从数据库获取所有已启用的平台实例
-
-    从 platform_configs 表中读取 enabled=True 的配置，
-    然后实例化对应的平台模块。支持同一平台多配置实例。
-    """
-    from app.models.platform_config import PlatformConfig
-
-    configs = PlatformConfig.query.filter_by(enabled=True).all()
-    result = []
-    for cfg in configs:
-        platform = get_platform(cfg.platform)
-        if platform:
-            # 用数据库中的配置更新平台实例
-            platform._config = cfg.get_config()
-            result.append(platform)
-    return result
-
-
 def get_platform_class(platform_type: str) -> Type[PlatformInterface] | None:
     """根据平台标识获取平台类（用于实例化）
 
