@@ -68,13 +68,17 @@ def _get_or_create_conversation(user_id: str, user_name: str, group_id: str | No
 
 def _handle_ai_response(conversation: Conversation, message: UnifiedMessage):
     try:
-        # 简短输入（<5字）跳过 RAG 检索
         content = message.content.strip()
+        # 先读历史（既用于增强检索，也用于最终Prompt）
+        history = get_conversation_history(conversation.id)
+
+        # 简短输入（<5字）跳过 RAG 检索
         if len(content) >= 5:
-            knowledge_chunks = KnowledgeService.search(content)
+            enhanced_query = _build_enhanced_query(content, history)
+            knowledge_chunks = KnowledgeService.search(enhanced_query)
         else:
             knowledge_chunks = []
-        history = get_conversation_history(conversation.id)
+
         handoff = HandoffService.get_handoff(message.user_id)
         is_waiting = handoff is not None
         messages = PromptBuilder.build_messages(user_input=content, knowledge_chunks=knowledge_chunks, conversation_history=history, is_handoff_waiting=is_waiting)
@@ -91,6 +95,41 @@ def _handle_ai_response(conversation: Conversation, message: UnifiedMessage):
             _send_reply(message, reply)
     except Exception as e:
         logger.error(f"AI处理异常: {e}", exc_info=True)
+
+
+def _build_enhanced_query(current_input: str, history: list[dict]) -> str:
+    """短追问时拼上历史上下文，提高RAG检索命中率
+
+    规则：
+    - > 8字：完整提问，直接用原始输入
+    - ≤ 8字：从历史取最近1轮用户消息，拼成"{上下文} | {当前输入}"
+    - 上下文截取前50字，防止超限
+
+    Args:
+        current_input: 用户当前输入（已strip）
+        history: 对话历史（role + content）
+
+    Returns:
+        str: 增强后的检索query
+    """
+    # 完整提问（>8字）不需要增强
+    if len(current_input) > 8:
+        return current_input
+
+    # 从历史找当前输入的上一轮用户消息
+    # 注意：当前输入已在 process_unified_message 中存入数据库，
+    # 所以 history 最后一条 user 消息就是当前输入本身
+    user_count = 0
+    for msg in reversed(history):
+        if msg["role"] == "user":
+            user_count += 1
+            if user_count == 2:  # 第2条 = 上一轮的用户提问
+                context = msg["content"][:50]
+                logger.debug(f"增强检索: '{current_input}' → '{context} | {current_input}'")
+                return f"{context} | {current_input}"
+
+    # 没有历史消息（首轮提问），直接返回
+    return current_input
 
 
 def _send_reply(original_message: UnifiedMessage, content: str):
