@@ -9,7 +9,7 @@ import base64
 import hashlib
 import os
 import time
-from flask import current_app, request, abort
+from flask import current_app, request, abort, jsonify
 
 
 def _get_secret() -> str:
@@ -64,6 +64,8 @@ def csrf_protected(f):
     从以下位置获取 Token（按优先级）：
     1. HTTP Header X-CSRFToken
     2. 表单字段 csrf_token
+
+    验证失败时 abort(403) 返回 HTML 错误页（适用于页面表单）。
     """
     from functools import wraps
 
@@ -75,5 +77,25 @@ def csrf_protected(f):
                 token = request.form.get("csrf_token", "")
             if not verify_csrf_token(token):
                 abort(403, description="CSRF token 无效或已过期")
+        return f(*args, **kwargs)
+    return decorated
+
+
+def csrf_protected_json(f):
+    """装饰器：对 POST 端点进行 CSRF 验证（返回 JSON）
+
+    和 csrf_protected 功能相同，但验证失败时返回 JSON 响应
+    而不是 HTML 错误页，适用于 AJAX / API 端点。
+    """
+    from functools import wraps
+
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if request.method == "POST":
+            token = request.headers.get("X-CSRFToken", "")
+            if not token:
+                token = request.form.get("csrf_token", "")
+            if not verify_csrf_token(token):
+                return jsonify({"success": False, "message": "CSRF token 无效或已过期"}), 403
         return f(*args, **kwargs)
     return decorated

@@ -9,7 +9,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, jsonif
 from app.models.platform_config import PlatformConfig
 from app.models import db
 from app.core.platform_manager import get_platform_class, register_platform
-from app.utils.csrf import generate_csrf_token, csrf_protected
+from app.utils.csrf import generate_csrf_token, csrf_protected_json
 
 logger = logging.getLogger(__name__)
 admin_config_bp = Blueprint("admin_config", __name__, url_prefix="/admin")
@@ -157,14 +157,9 @@ def platform_delete(pid):
 
 @admin_config_bp.route("/platforms/<int:pid>/test", methods=["POST"])
 @admin_required
+@csrf_protected_json
 def platform_test(pid):
     """测试平台连接"""
-    # CSRF 验证
-    token = request.form.get("csrf_token", "")
-    from app.utils.csrf import verify_csrf_token
-    if not verify_csrf_token(token):
-        return jsonify({"success": False, "message": "CSRF token 无效或已过期"}), 403
-
     pc = PlatformConfig.query.get_or_404(pid)
     platform_cls = get_platform_class(pc.platform)
     if not platform_cls:

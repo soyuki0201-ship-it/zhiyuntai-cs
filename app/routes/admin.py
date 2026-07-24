@@ -13,6 +13,7 @@ import csv
 import io
 from datetime import datetime
 from functools import wraps
+from urllib.parse import quote
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify, session, Response
 from app.models.models import db, Conversation, Handoff, Message, Knowledge
 from app.services.handoff_service import HandoffService
@@ -310,17 +311,17 @@ def knowledge_import():
 def knowledge_import_template():
     """下载 CSV 导入模板"""
     output = io.StringIO()
-    output.write("﻿")  # UTF-8 with BOM
     writer = csv.writer(output)
     writer.writerow(["title", "content", "category", "tags"])
     writer.writerow(["测略功能介绍", "测略功能是分析投放数据的工具，支持多维度筛选和导出。", "产品功能介绍", "测略,功能介绍"])
     writer.writerow(["企业微信接入常见问题", "问题：支持企业微信吗？答案：支持企业微信。", "产品常见问题", "企业微信,接入"])
     writer.writerow(["靓号插件使用教程", "第一步：安装插件\n第二步：登录账号\n第三步：开始使用", "产品使用教程", "靓号,教程"])
 
+    csv_bytes = output.getvalue().encode("utf-8-sig")
     return Response(
-        output.getvalue(),
-        mimetype="text/csv",
-        headers={"Content-Disposition": "attachment; filename=知识库导入模板.csv"},
+        csv_bytes,
+        mimetype="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename*=utf-8''{quote('知识库导入模板.csv')}"},
     )
 
 

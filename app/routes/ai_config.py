@@ -39,6 +39,7 @@ def inject_csrf_token():
 
 
 @ai_config_bp.route("/ai-config")
+@ai_config_bp.route("/ai_config")
 @admin_required
 def ai_config_page():
     """AI 配置页面"""

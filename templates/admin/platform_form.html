@@ -27,7 +27,7 @@
   <div class="btn-group" style="margin-top:12px">
     <button type="submit" class="btn btn-primary">💾 保存</button>
     <a href="{{ url_for('admin_config.platform_list') }}" class="btn btn-outline">取消</a>
-    {% if config %}<button type="button" class="btn btn-outline" onclick="fetch('{{ url_for('admin_config.platform_test', pid=config.id) }}',{method:'POST',headers:{'X-CSRFToken':document.querySelector('input[name=csrf_token]').value}}).then(r=>r.json()).then(d=>alert(d.message||'连接测试完成'))">📡 测试连接</button>{% endif %}
+    {% if config %}<button type="button" class="btn btn-outline" onclick="var f=new FormData();f.append('csrf_token',document.querySelector('input[name=csrf_token]').value);fetch('{{ url_for('admin_config.platform_test', pid=config.id) }}',{method:'POST',body:f}).then(r=>r.json()).then(d=>alert(d.message||'连接测试完成'))">📡 测试连接</button>{% endif %}
   </div>
 </form>
 </div></div>
