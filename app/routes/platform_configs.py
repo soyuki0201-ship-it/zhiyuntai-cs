@@ -91,11 +91,17 @@ def platform_add():
         {"type": "wechat_work", "name": "企业微信"},
     ]
     schema = {"fields": []}
+    schema_error = None
     if available:
         cls = get_platform_class(available[0]["type"])
         if cls:
-            schema = cls({}).get_config_schema()
-    return render_template("admin/platform_form.html", config=None, available=available, schema=schema)
+            try:
+                schema = cls({}).get_config_schema()
+            except Exception as e:
+                schema_error = f"get_config_schema() 执行异常: {e}"
+        else:
+            schema_error = "get_platform_class('wechat_work') 返回了 None，企微模块可能未正确加载"
+    return render_template("admin/platform_form.html", config=None, available=available, schema=schema, schema_error=schema_error)
 
 
 @admin_config_bp.route("/platforms/<int:pid>/edit", methods=["GET", "POST"])
@@ -135,9 +141,17 @@ def platform_edit(pid):
         return redirect(url_for("admin_config.platform_list"))
 
     platform_cls = get_platform_class(pc.platform)
-    schema = platform_cls({}).get_config_schema() if platform_cls else {"fields": []}
+    schema = {"fields": []}
+    schema_error = None
+    if platform_cls:
+        try:
+            schema = platform_cls({}).get_config_schema()
+        except Exception as e:
+            schema_error = f"get_config_schema() 执行异常: {e}"
+    else:
+        schema_error = "get_platform_class('wechat_work') 返回了 None，企微模块可能未正确加载"
 
-    return render_template("admin/platform_form.html", config=pc, available=[], schema=schema)
+    return render_template("admin/platform_form.html", config=pc, available=[], schema=schema, schema_error=schema_error)
 
 
 @admin_config_bp.route("/platforms/<int:pid>/delete", methods=["POST"])

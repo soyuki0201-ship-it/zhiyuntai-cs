@@ -14,6 +14,9 @@
   <div class="form-group"><label>配置名称</label><input type="text" name="name" value="{{ config.name if config else '' }}" required placeholder="例如：企业微信-生产环境"></div>
   <div class="form-group"><label><input type="checkbox" name="enabled" value="1" {% if not config or config.enabled %}checked{% endif %}> 启用</label></div>
   <div id="config-fields">
+  {% if schema_error %}
+  <div class="status-indicator warn" style="margin-bottom:16px">⚠️ {{ schema_error }}</div>
+  {% endif %}
   {% if schema and schema.fields %}
     {% for field in schema.fields %}
     <div class="form-group"><label>{{ field.label }}{% if field.required %}<span style="color:red">*</span>{% endif %}</label>
@@ -22,6 +25,8 @@
       {% if field.key == 'group_robot_webhook' %}<div class="hint">可选，群聊场景需要</div>{% endif %}
     </div>
     {% endfor %}
+  {% elif not schema_error %}
+  <div class="status-indicator warn" style="margin-bottom:16px">⚠️ 未加载到配置字段（schema.fields 为空），请检查服务器日志</div>
   {% endif %}
   </div>
   <div class="btn-group" style="margin-top:12px">
