@@ -4,7 +4,7 @@ import struct
 import time
 import base64
 import xml.etree.ElementTree as ET
-from cryptography.hazmat.primitives.ciphers import Cipher, AES, modes
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives import padding
 
 
@@ -57,8 +57,8 @@ class WeChatWorkCrypto:
 
     def _decrypt(self, encrypted_text: str) -> bytes:
         encrypted = base64.b64decode(encrypted_text)
-        cipher = Cipher(AES.new(self.aes_key, AES.MODE_CBC, self.aes_key[:16]))
+        cipher = Cipher(algorithms.AES(self.aes_key), modes.CBC(self.aes_key[:16]))
         decryptor = cipher.decryptor()
         decrypted = decryptor.update(encrypted) + decryptor.finalize()
-        unpadder = padding.PKCS7(256).unpadder()
+        unpadder = padding.PKCS7(128).unpadder()
         return unpadder.update(decrypted) + unpadder.finalize()
