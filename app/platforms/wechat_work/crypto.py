@@ -30,13 +30,13 @@ class WeChatWorkCrypto:
 
     def decrypt_message(self, msg_signature: str, timestamp: str,
                         nonce: str, encrypted_xml: str) -> str:
-        if not self._verify_signature(msg_signature, timestamp, nonce, encrypted_xml):
-            raise ValueError("Signature verification failed")
         root = ET.fromstring(encrypted_xml)
         encrypt_node = root.find("Encrypt")
         if encrypt_node is None or encrypt_node.text is None:
             raise ValueError("No Encrypt node found in XML")
         encrypt_text = encrypt_node.text
+        if not self._verify_signature(msg_signature, timestamp, nonce, encrypt_text):
+            raise ValueError("Signature verification failed")
         plain_text = self._decrypt(encrypt_text)
         msg_len = struct.unpack(">I", plain_text[16:20])[0]
         msg_content = plain_text[20:20 + msg_len].decode("utf-8")

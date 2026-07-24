@@ -73,6 +73,7 @@ def _register_platforms(app):
                 platform_cls = get_platform_class(pc.platform)
                 if platform_cls:
                     instance = platform_cls(pc.get_config())
+                    instance._config_id = pc.id
                     register_platform(instance)
                     app.logger.info(f"平台已加载: {pc.platform} ({pc.name})")
             except Exception as e:
