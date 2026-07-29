@@ -44,13 +44,15 @@ def init_scheduler(app):
 
 
 def _cleanup_expired_conversations():
-    """清理30天前的过期对话"""
+    """清理过期对话（从 AIConfig 表读取保留天数）"""
     from datetime import datetime, timedelta
-    from app.models.models import db, Conversation, Message, Handoff
+    from app.models.models import db, Conversation, Message, Handoff, AIConfig
 
-    cutoff = datetime.utcnow() - timedelta(days=30)
+    cfg = AIConfig.query.first()
+    ttl_days = cfg.conversation_ttl_days if cfg else 30
+    cutoff = datetime.utcnow() - timedelta(days=ttl_days)
 
-    # 查找30天前无更新的对话（不限状态）
+    # 查找超保留天数无更新的对话（不限状态）
     expired = Conversation.query.filter(
         Conversation.updated_at < cutoff,
     ).all()
@@ -65,4 +67,4 @@ def _cleanup_expired_conversations():
 
     if expired:
         db.session.commit()
-        logger.info(f"数据清理：已清理 {len(expired)} 条过期对话")
+        logger.info(f"数据清理：已清理 {len(expired)} 条过期对话（保留{ttl_days}天）")

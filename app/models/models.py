@@ -55,28 +55,6 @@ class Message(db.Model):
     )
 
 
-class Handoff(db.Model):
-    __tablename__ = "handoffs"
-
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    conversation_id = db.Column(db.Integer, db.ForeignKey("conversations.id"), nullable=False)
-    channel = db.Column(db.String(32), nullable=False, comment="来源通道")
-    user_id = db.Column(db.String(128), nullable=False, comment="被接管的客户ID")
-    user_name = db.Column(db.String(128), nullable=True, comment="用户显示名称（接管时记录）")
-    reason = db.Column(db.Text, nullable=True, comment="转接原因（AI判断理由）")
-    status = db.Column(db.String(16), nullable=False, default="active", comment="状态：active(接管中) / resolved(已释放)")
-    handled_by = db.Column(db.String(64), nullable=True, comment="处理人企业微信ID")
-    taken_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, comment="接管时间")
-    last_active_at = db.Column(db.DateTime, nullable=True, comment="客户最后活跃时间（用于超时判断）")
-    resolved_at = db.Column(db.DateTime, nullable=True, comment="释放时间")
-
-    __table_args__ = (
-        db.Index("idx_h_user_id", "user_id"),
-        db.Index("idx_h_status", "status"),
-        db.Index("idx_h_taken_at", "taken_at"),
-    )
-
-
 class Knowledge(db.Model):
     __tablename__ = "knowledge"
 
@@ -114,8 +92,31 @@ class AIProvider(db.Model):
     )
 
 
+class Handoff(db.Model):
+    __tablename__ = "handoffs"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    conversation_id = db.Column(db.Integer, db.ForeignKey("conversations.id"), nullable=False)
+    channel = db.Column(db.String(32), nullable=False, comment="来源通道")
+    user_id = db.Column(db.String(128), nullable=False, comment="被接管的客户ID")
+    user_name = db.Column(db.String(128), nullable=True, comment="用户显示名称（接管时记录）")
+    reason = db.Column(db.Text, nullable=True, comment="转接原因（AI判断理由）")
+    status = db.Column(db.String(16), nullable=False, default="active", comment="状态：active(接管中) / resolved(已释放)")
+    handled_by = db.Column(db.String(64), nullable=True, comment="处理人企业微信ID")
+    is_auto = db.Column(db.Boolean, nullable=False, default=False, comment="是否AI自动转人工（True=AI，False=运营主动接管）")
+    taken_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, comment="接管时间")
+    last_active_at = db.Column(db.DateTime, nullable=True, comment="客户最后活跃时间（用于超时判断）")
+    resolved_at = db.Column(db.DateTime, nullable=True, comment="释放时间")
+
+    __table_args__ = (
+        db.Index("idx_h_user_id", "user_id"),
+        db.Index("idx_h_status", "status"),
+        db.Index("idx_h_taken_at", "taken_at"),
+    )
+
+
 class AIConfig(db.Model):
-    """AI系统配置（单例）"""
+    """AI系统配置（单例，包含系统设置持久化）"""
     __tablename__ = "ai_config"
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
@@ -127,4 +128,6 @@ class AIConfig(db.Model):
     handoff_markers = db.Column(db.Text, nullable=True, comment="转人工关键词（逗号分隔）")
     rag_top_k = db.Column(db.Integer, nullable=False, default=5, comment="检索TOP-K")
     rag_similarity_threshold = db.Column(db.Float, nullable=False, default=0.6, comment="相似度阈值")
+    conversation_ttl_days = db.Column(db.Integer, nullable=False, default=30, comment="对话保留天数")
+    handoff_timeout_minutes = db.Column(db.Integer, nullable=False, default=30, comment="接管超时释放分钟数")
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -2,6 +2,11 @@
 
 接收 UnifiedMessage，处理 AI 对话，产出 UnifiedReply。
 平台接入层 -> UnifiedMessage -> 此模块 -> UnifiedReply -> 平台发送层
+
+事务管理策略：
+- _save_message 使用 flush() 而非 commit()，由顶层调用者统一 commit()
+- _handle_ai_response 内部所有操作在同一个事务中完成
+- 异常时全局 rollback，避免部分写入
 """
 import logging
 from datetime import datetime
@@ -26,6 +31,12 @@ def _get_ai_service():
 
 
 def process_unified_message(message: UnifiedMessage):
+    """处理统一消息（外部入口）
+
+    管理顶层事务：所有数据库操作在同一事务中完成。
+    后续发送：commit成功后执行外部API调用，避免发送成功但回滚的状态不一致。
+    """
+    pending_reply = None  # 待发送的回复（commit成功后执行）
     try:
         conversation = _get_or_create_conversation(
             user_id=message.user_id, user_name=message.user_name,
@@ -36,37 +47,58 @@ def process_unified_message(message: UnifiedMessage):
         if HandoffService.is_handed_over(message.user_id):
             HandoffService.update_last_active(message.user_id)
             _save_message(conversation.id, "user", message.content, message.msg_type, message.platform, message.image_path)
-            return
-        _save_message(conversation.id, "user", message.content, message.msg_type, message.platform, message.image_path)
-        _handle_ai_response(conversation, message)
+        else:
+            _save_message(conversation.id, "user", message.content, message.msg_type, message.platform, message.image_path)
+            pending_reply = _handle_ai_response(conversation, message)
+
+        # 所有数据库操作成功，统一提交
+        db.session.commit()
+
+        # commit 成功后发送回复（外部位幂等操作，失败不影响数据库一致性）
+        if pending_reply is not None:
+            _send_reply(pending_reply)
+
     except Exception as e:
-        logger.error(f"处理消息异常: {e}", exc_info=True)
+        db.session.rollback()
+        logger.error(f"处理消息异常，事务已回滚: {e}", exc_info=True)
 
 
 def _get_or_create_conversation(user_id: str, user_name: str, group_id: str | None, group_name: str | None, platform: str, platform_config_id: int | None = None) -> Conversation:
-    if group_id:
-        conv = Conversation.query.filter_by(group_id=group_id, user_id=user_id, status="active").first()
-    else:
-        conv = Conversation.query.filter_by(user_id=user_id, status="active").first()
-    if conv:
-        if user_name:
-            conv.user_name = user_name
-        if group_name:
-            conv.group_name = group_name
-        if platform_config_id is not None:
-            conv.platform_config_id = platform_config_id
-        conv.updated_at = datetime.utcnow()
-        db.session.commit()
+    """查找或创建对话记录"""
+    try:
+        if group_id:
+            conv = Conversation.query.filter_by(group_id=group_id, user_id=user_id, status="active").first()
+        else:
+            conv = Conversation.query.filter_by(user_id=user_id, status="active").first()
+        if conv:
+            if user_name:
+                conv.user_name = user_name
+            if group_name:
+                conv.group_name = group_name
+            if platform_config_id is not None:
+                conv.platform_config_id = platform_config_id
+            conv.updated_at = datetime.utcnow()
+            return conv
+        conv = Conversation(channel=platform, user_id=user_id, user_name=user_name,
+                            group_id=group_id, group_name=group_name, status="active",
+                            platform_config_id=platform_config_id)
+        db.session.add(conv)
         return conv
-    conv = Conversation(channel=platform, user_id=user_id, user_name=user_name,
-                        group_id=group_id, group_name=group_name, status="active",
-                        platform_config_id=platform_config_id)
-    db.session.add(conv)
-    db.session.commit()
-    return conv
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"获取/创建对话失败: {e}", exc_info=True)
+        raise
 
 
-def _handle_ai_response(conversation: Conversation, message: UnifiedMessage):
+def _handle_ai_response(conversation: Conversation, message: UnifiedMessage) -> UnifiedReply | None:
+    """处理 AI 回复（与外部调用者共享同一事务）
+
+    注意：不在此方法内 commit()。由 process_unified_message 统一 commit。
+    返回待发送的 UnifiedReply（commit 成功后执行发送），转人工时返回 None。
+
+    Returns:
+        UnifiedReply | None: commit 后需要发送的回复，None 表示已转人工无需发送
+    """
     try:
         content = message.content.strip()
         # 先读历史（既用于增强检索，也用于最终Prompt）
@@ -87,14 +119,21 @@ def _handle_ai_response(conversation: Conversation, message: UnifiedMessage):
         should_handoff = PromptBuilder.check_should_handoff(reply)
         if should_handoff:
             _save_message(conversation.id, "assistant", reply, "text", message.platform)
-            HandoffService.take_over(message.user_id)
+            HandoffService.take_over(message.user_id, is_auto=True)
             conversation.status = "transferred"
-            db.session.commit()
+            return None  # 转人工，不自动回复
         else:
             _save_message(conversation.id, "assistant", reply, "text", message.platform)
-            _send_reply(message, reply)
+            # 返回统一回复模型，由外层 commit 成功后发送
+            return UnifiedReply(
+                platform=message.platform,
+                user_id=message.user_id,
+                group_id=message.group_id,
+                content=reply,
+            )
     except Exception as e:
         logger.error(f"AI处理异常: {e}", exc_info=True)
+        raise  # 让上层统一处理事务回滚
 
 
 def _build_enhanced_query(current_input: str, history: list[dict]) -> str:
@@ -104,50 +143,42 @@ def _build_enhanced_query(current_input: str, history: list[dict]) -> str:
     - > 8字：完整提问，直接用原始输入
     - ≤ 8字：从历史取最近1轮用户消息，拼成"{上下文} | {当前输入}"
     - 上下文截取前50字，防止超限
-
-    Args:
-        current_input: 用户当前输入（已strip）
-        history: 对话历史（role + content）
-
-    Returns:
-        str: 增强后的检索query
     """
-    # 完整提问（>8字）不需要增强
     if len(current_input) > 8:
         return current_input
 
-    # 从历史找当前输入的上一轮用户消息
-    # 注意：当前输入已在 process_unified_message 中存入数据库，
-    # 所以 history 最后一条 user 消息就是当前输入本身
     user_count = 0
     for msg in reversed(history):
         if msg["role"] == "user":
             user_count += 1
-            if user_count == 2:  # 第2条 = 上一轮的用户提问
+            if user_count == 2:
                 context = msg["content"][:50]
                 logger.debug(f"增强检索: '{current_input}' → '{context} | {current_input}'")
                 return f"{context} | {current_input}"
 
-    # 没有历史消息（首轮提问），直接返回
     return current_input
 
 
-def _send_reply(original_message: UnifiedMessage, content: str):
-    reply = UnifiedReply(platform=original_message.platform, user_id=original_message.user_id, group_id=original_message.group_id, content=content)
-    platform = get_platform(original_message.platform)
-    if platform:
-        platform.send_message(reply)
+def _send_reply(reply: UnifiedReply):
+    """发送回复到 IM 平台（commit 成功后调用，失败不影响数据库一致性）"""
+    try:
+        platform = get_platform(reply.platform)
+        if platform:
+            platform.send_message(reply)
+    except Exception as e:
+        logger.error(f"发送回复失败: {e}", exc_info=True)
 
 
 def _save_message(conversation_id: int, role: str, content: str, msg_type: str, platform: str, image_path: str = None):
+    """保存消息（使用 flush 保持事务边界）"""
     msg = Message(conversation_id=conversation_id, role=role, content=content, msg_type=msg_type, channel=platform, image_path=image_path)
     db.session.add(msg)
-    db.session.commit()
+    db.session.flush()
 
 
 def get_conversation_history(conversation_id: int, max_rounds: int = None) -> list[dict]:
+    """获取对话历史"""
     if max_rounds is None:
-        # 优先从 AIConfig 表读取，兜底使用 config.py 默认值
         try:
             from app.models.models import AIConfig
             ai_config = AIConfig.query.first()

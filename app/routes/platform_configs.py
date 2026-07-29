@@ -9,7 +9,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, jsonif
 from app.models.platform_config import PlatformConfig
 from app.models import db
 from app.core.platform_manager import get_platform_class, register_platform
-from app.utils.csrf import generate_csrf_token, csrf_protected_json
+from app.utils.csrf import csrf_protected_json
 
 logger = logging.getLogger(__name__)
 admin_config_bp = Blueprint("admin_config", __name__, url_prefix="/admin")
@@ -23,18 +23,6 @@ def admin_required(f):
             return redirect(url_for("admin.login"))
         return f(*args, **kwargs)
     return decorated
-
-
-@admin_config_bp.context_processor
-def inject_csrf_token():
-    """注入 CSRF Token 生成函数和待处理数量到所有模板"""
-    pending_count = 0
-    try:
-        from app.services.handoff_service import HandoffService
-        pending_count = HandoffService.get_pending_count()
-    except Exception:
-        pass
-    return dict(csrf_token=generate_csrf_token, pending_count=pending_count)
 
 
 @admin_config_bp.route("/platforms")
@@ -89,6 +77,7 @@ def platform_add():
     # GET: 展示可用的平台类型，并预加载第一个平台的 schema
     available = [
         {"type": "wechat_work", "name": "企业微信"},
+        {"type": "wechat_kf", "name": "微信客服"},
     ]
     schema = {"fields": []}
     schema_error = None

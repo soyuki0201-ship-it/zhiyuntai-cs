@@ -12,7 +12,7 @@ from functools import wraps
 from flask import Blueprint, render_template, request, redirect, url_for, jsonify, session, current_app
 from app.models.models import db, AIProvider, AIConfig
 from app.models.platform_config import _encrypt_json, _decrypt_json
-from app.utils.csrf import generate_csrf_token, csrf_protected
+from app.utils.csrf import csrf_protected
 
 logger = logging.getLogger(__name__)
 ai_config_bp = Blueprint("ai_config", __name__, url_prefix="/admin")
@@ -25,17 +25,6 @@ def admin_required(f):
             return redirect(url_for("admin.login"))
         return f(*args, **kwargs)
     return decorated
-
-
-@ai_config_bp.context_processor
-def inject_csrf_token():
-    pending_count = 0
-    try:
-        from app.services.handoff_service import HandoffService
-        pending_count = HandoffService.get_pending_count()
-    except Exception:
-        pass
-    return dict(csrf_token=generate_csrf_token, pending_count=pending_count)
 
 
 @ai_config_bp.route("/ai-config")
@@ -223,6 +212,8 @@ def _init_default_config():
         handoff_markers=",".join(PromptBuilder.handoff_markers),
         rag_top_k=5,
         rag_similarity_threshold=0.6,
+        conversation_ttl_days=30,
+        handoff_timeout_minutes=30,
     )
     db.session.add(config)
     db.session.commit()

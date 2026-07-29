@@ -49,6 +49,7 @@ def get_platform_class(platform_type: str) -> Type[PlatformInterface] | None:
     """
     mapping = {
         "wechat_work": "app.platforms.wechat_work:WeChatWorkPlatform",
+        "wechat_kf": "app.platforms.wechat_kf:WeChatKFPlatform",
     }
     if platform_type not in mapping:
         return None

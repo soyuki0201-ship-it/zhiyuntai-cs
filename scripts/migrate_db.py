@@ -7,8 +7,12 @@
 4. handoffs.user_id VARCHAR(64) → VARCHAR(128)
 5. messages 表新增 image_path 字段
 6. ai_providers.api_key VARCHAR(512) → VARCHAR(1024)
+7. 微信客服：kf_msg_log 消息幂等去重表
+8. 微信客服：kf_cursor sync_msg游标持久化表
+9. 微信客服：kf_queue MySQL消息队列表
 
 安全说明：每条 ALTER 都有"字段已存在"保护，重复执行不会报错。
+CREATE TABLE IF NOT EXISTS 可重复执行，不会报错。
 """
 
 import sys
@@ -107,6 +111,105 @@ with app.app_context():
     # 7. 确保所有新表存在
     db.create_all()
     print("  ✅ db.create_all() 完成（新表已创建）")
+
+    # 8. 微信客服：kf_msg_log 消息幂等去重表
+    try:
+        db.session.execute(text("""
+            CREATE TABLE IF NOT EXISTS kf_msg_log (
+                id          INT AUTO_INCREMENT PRIMARY KEY,
+                msgid       VARCHAR(64) NOT NULL,
+                created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE INDEX uk_msgid (msgid)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='微信客服消息幂等去重表'
+        """))
+        db.session.commit()
+        print("  ✅ 已创建 kf_msg_log")
+        migrations_run += 1
+    except Exception as e:
+        db.session.rollback()
+        print(f"  ❌ kf_msg_log 创建失败: {e}")
+
+    # 9. 微信客服：kf_cursor sync_msg游标持久化表
+    try:
+        db.session.execute(text("""
+            CREATE TABLE IF NOT EXISTS kf_cursor (
+                id          INT AUTO_INCREMENT PRIMARY KEY,
+                kfid        VARCHAR(64) NOT NULL COMMENT '微信客服 open_kfid',
+                cursor_val  TEXT NOT NULL COMMENT '游标值',
+                updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE INDEX uk_kfid (kfid)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='微信客服 sync_msg 游标持久化表'
+        """))
+        db.session.commit()
+        print("  ✅ 已创建 kf_cursor")
+        migrations_run += 1
+    except Exception as e:
+        db.session.rollback()
+        print(f"  ❌ kf_cursor 创建失败: {e}")
+
+    # 10. 微信客服：kf_queue MySQL消息队列表
+    try:
+        db.session.execute(text("""
+            CREATE TABLE IF NOT EXISTS kf_queue (
+                id          INT AUTO_INCREMENT PRIMARY KEY,
+                event_data  TEXT NOT NULL COMMENT '回调事件数据（JSON）',
+                status      VARCHAR(16) NOT NULL DEFAULT 'pending' COMMENT 'pending(待处理) / done(已完成)',
+                created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_status (status),
+                INDEX idx_created (created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='微信客服消息队列（MySQL替代Redis）'
+        """))
+        db.session.commit()
+        print("  ✅ 已创建 kf_queue")
+        migrations_run += 1
+    except Exception as e:
+        db.session.rollback()
+        print(f"  ❌ kf_queue 创建失败: {e}")
+
+    # 11. handoffs 表新增 is_auto 字段
+    try:
+        db.session.execute(text(
+            "ALTER TABLE handoffs ADD COLUMN is_auto TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否AI自动转人工（True=AI，False=运营主动接管）'"
+        ))
+        db.session.commit()
+        print("  ✅ 已添加 handoffs.is_auto")
+        migrations_run += 1
+    except Exception as e:
+        db.session.rollback()
+        if "Duplicate column" in str(e):
+            print("  ⏭️ handoffs.is_auto 已存在，跳过")
+        else:
+            print(f"  ❌ handoffs.is_auto 添加失败: {e}")
+
+    # 12. ai_config 表新增 conversation_ttl_days 和 handoff_timeout_minutes
+    try:
+        db.session.execute(text(
+            "ALTER TABLE ai_config ADD COLUMN conversation_ttl_days INT NOT NULL DEFAULT 30 COMMENT '对话保留天数'"
+        ))
+        db.session.commit()
+        print("  ✅ 已添加 ai_config.conversation_ttl_days")
+        migrations_run += 1
+    except Exception as e:
+        db.session.rollback()
+        if "Duplicate column" in str(e):
+            print("  ⏭️ ai_config.conversation_ttl_days 已存在，跳过")
+        else:
+            print(f"  ❌ ai_config.conversation_ttl_days 添加失败: {e}")
+
+    try:
+        db.session.execute(text(
+            "ALTER TABLE ai_config ADD COLUMN handoff_timeout_minutes INT NOT NULL DEFAULT 30 COMMENT '接管超时释放分钟数'"
+        ))
+        db.session.commit()
+        print("  ✅ 已添加 ai_config.handoff_timeout_minutes")
+        migrations_run += 1
+    except Exception as e:
+        db.session.rollback()
+        if "Duplicate column" in str(e):
+            print("  ⏭️ ai_config.handoff_timeout_minutes 已存在，跳过")
+        else:
+            print(f"  ❌ ai_config.handoff_timeout_minutes 添加失败: {e}")
 
     if migrations_run > 0:
         print(f"\n🎉 迁移完成！共执行 {migrations_run} 项变更")

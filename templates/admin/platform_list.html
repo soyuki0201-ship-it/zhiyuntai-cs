@@ -21,8 +21,8 @@ function testConnection(configId) {
 <div class="card-body" style="display:grid;gap:16px">
   {% for c in configs %}
   <div style="border:1px solid {% if c.enabled %}#b7eb8f{% else %}#e8e8e8{% endif %};border-radius:8px;padding:16px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;background:{% if c.enabled %}#f6ffed{% else %}#fff{% endif %}}">
-    <div style="width:44px;height:44px;background:#07c160;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px">💼</div>
-    <div style="flex:1;min-width:160px"><div style="font-weight:600;font-size:15px">{{ c.name }}</div><div style="font-size:12px;color:#999;margin-top:2px">渠道: {{ c.platform }}</div></div>
+    <div style="width:44px;height:44px;background:{% if c.platform == 'wechat_kf' %}#07c160{% else %}#07c160{% endif %};border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px">{% if c.platform == 'wechat_kf' %}💬{% else %}💼{% endif %}</div>
+    <div style="flex:1;min-width:160px"><div style="font-weight:600;font-size:15px">{{ c.name }}</div><div style="font-size:12px;color:#999;margin-top:2px">渠道: {{ c.platform }} {% if c.platform == 'wechat_kf' %}· 微信客服 {% elif c.platform == 'wechat_work' %}· 企业微信 {% endif %}</div></div>
     <div>{% if c.enabled %}<span class="tag tag-green">● 已启用</span>{% else %}<span class="tag tag-gray">已禁用</span>{% endif %}</div>
     <div class="btn-group">
       <a href="{{ url_for('admin_config.platform_edit', pid=c.id) }}" class="btn btn-outline btn-sm">⚙️ 配置</a>

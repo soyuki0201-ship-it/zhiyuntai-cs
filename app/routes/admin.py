@@ -18,7 +18,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, jsonif
 from app.models.models import db, Conversation, Handoff, Message, Knowledge
 from app.services.handoff_service import HandoffService
 from app.services.knowledge_service import KnowledgeService
-from app.utils.csrf import generate_csrf_token, csrf_protected
+from app.utils.csrf import csrf_protected
 
 logger = logging.getLogger(__name__)
 admin_bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -57,17 +57,6 @@ def logout():
     return redirect(url_for("admin.login"))
 
 
-@admin_bp.context_processor
-def inject_csrf_token():
-    """注入 CSRF Token 和待处理数量到所有模板"""
-    pending_count = 0
-    try:
-        pending_count = HandoffService.get_pending_count()
-    except Exception:
-        pass
-    return dict(csrf_token=generate_csrf_token, pending_count=pending_count)
-
-
 @admin_bp.route("/")
 @admin_bp.route("/dashboard")
 @admin_required
@@ -102,9 +91,21 @@ def conversation_list():
     pagination = query.order_by(Conversation.updated_at.desc()).paginate(page=page, per_page=20, error_out=False)
     total_count = Conversation.query.count()
 
+    # 批量查询最后一条消息（优化N+1为2次查询）
+    from sqlalchemy import func
+    conv_ids = [c.id for c in pagination.items]
+    last_msg_map = {}
+    if conv_ids:
+        subq = db.session.query(
+            Message.conversation_id,
+            func.max(Message.id).label('max_id')
+        ).filter(Message.conversation_id.in_(conv_ids)).group_by(Message.conversation_id).subquery()
+        last_msgs = Message.query.join(subq, Message.id == subq.c.max_id).all()
+        last_msg_map = {m.conversation_id: m for m in last_msgs}
+
     conv_list = []
     for conv in pagination.items:
-        last_msg = Message.query.filter_by(conversation_id=conv.id).order_by(Message.created_at.desc()).first()
+        last_msg = last_msg_map.get(conv.id)
         conv_list.append({
             "id": conv.id, "channel": conv.channel, "user_id": conv.user_id,
             "user_name": conv.user_name or conv.user_id,
@@ -132,10 +133,16 @@ def takeover():
     user_id = request.form.get("user_id", "")
     if not user_id:
         return jsonify({"success": False, "message": "缺少 user_id"}), 400
-    success = HandoffService.take_over(user_id)
-    if success:
-        return jsonify({"success": True, "message": "接管成功"})
-    return jsonify({"success": False, "message": "接管失败：客户无活跃对话"})
+    try:
+        success = HandoffService.take_over(user_id)
+        if success:
+            db.session.commit()
+            return jsonify({"success": True, "message": "接管成功"})
+        return jsonify({"success": False, "message": "接管失败：客户无活跃对话"})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"接管异常: {e}", exc_info=True)
+        return jsonify({"success": False, "message": "接管操作异常，请重试"}), 500
 
 
 @admin_bp.route("/release", methods=["POST"])
@@ -145,10 +152,16 @@ def release():
     user_id = request.form.get("user_id", "")
     if not user_id:
         return jsonify({"success": False, "message": "缺少 user_id"}), 400
-    success = HandoffService.release(user_id)
-    if success:
-        return jsonify({"success": True, "message": "释放成功"})
-    return jsonify({"success": False, "message": "释放失败：该客户未被接管"})
+    try:
+        success = HandoffService.release(user_id)
+        if success:
+            db.session.commit()
+            return jsonify({"success": True, "message": "释放成功"})
+        return jsonify({"success": False, "message": "释放失败：该客户未被接管"})
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"释放异常: {e}", exc_info=True)
+        return jsonify({"success": False, "message": "释放操作异常，请重试"}), 500
 
 
 @admin_bp.route("/pending")
@@ -159,10 +172,22 @@ def pending_list():
     pagination = query.order_by(Conversation.updated_at.desc()).paginate(page=page, per_page=20, error_out=False)
 
     conv_list = []
+    # 批量查询最后一条消息（优化 N+1）
+    conv_ids = [c.id for c in pagination.items]
+    last_msg_map_pending = {}
+    if conv_ids:
+        from sqlalchemy import func
+        subq = db.session.query(
+            Message.conversation_id,
+            func.max(Message.id).label('max_id')
+        ).filter(Message.conversation_id.in_(conv_ids)).group_by(Message.conversation_id).subquery()
+        last_msgs = Message.query.join(subq, Message.id == subq.c.max_id).all()
+        last_msg_map_pending = {m.conversation_id: m for m in last_msgs}
+
     for conv in pagination.items:
         if HandoffService.is_handed_over(conv.user_id):
             continue
-        last_msg = Message.query.filter_by(conversation_id=conv.id).order_by(Message.created_at.desc()).first()
+        last_msg = last_msg_map_pending.get(conv.id)
         conv_list.append({
             "id": conv.id, "channel": conv.channel, "user_id": conv.user_id,
             "user_name": conv.user_name or conv.user_id,
@@ -172,7 +197,12 @@ def pending_list():
         })
 
     items, total = HandoffService.get_all_active(page=1, per_page=100)
-    return render_template("admin/pending.html", conversations=conv_list, handoffs=items, pagination=pagination, active_count=total)
+    return render_template("admin/pending.html",
+        conversations=conv_list, handoffs=items,
+        pagination=pagination,
+        pending_count=HandoffService.get_pending_count(),
+        active_count=HandoffService.get_processing_count(),
+    )
 
 
 @admin_bp.route("/knowledge")
@@ -329,11 +359,12 @@ def knowledge_import_template():
 @admin_required
 def settings_page():
     """系统设置页面"""
-    from flask import current_app
+    from app.models.models import AIConfig
+    cfg = AIConfig.query.first()
     return render_template("admin/settings.html",
         admin_username=current_app.config.get("ADMIN_USERNAME", "admin"),
-        conversation_ttl=current_app.config.get("CONVERSATION_TTL_DAYS", 30),
-        handoff_timeout=current_app.config.get("HANDOFF_TIMEOUT_MINUTES", 30),
+        conversation_ttl_days=cfg.conversation_ttl_days if cfg else 30,
+        handoff_timeout_minutes=cfg.handoff_timeout_minutes if cfg else 30,
     )
 
 
@@ -341,21 +372,29 @@ def settings_page():
 @admin_required
 @csrf_protected
 def settings_save():
-    """保存系统设置"""
-    from flask import current_app
-    conversation_ttl = request.form.get("conversation_ttl", "").strip()
-    handoff_timeout = request.form.get("handoff_timeout", "").strip()
+    """保存系统设置（存入数据库 AIConfig 表，重启不丢失）"""
+    from app.models.models import AIConfig
+    conversation_ttl = request.form.get("conversation_ttl_days", "").strip()
+    handoff_timeout = request.form.get("handoff_timeout_minutes", "").strip()
+
+    cfg = AIConfig.query.first()
+    if not cfg:
+        return jsonify({"success": False, "message": "AI 配置未初始化，请先访问 AI 配置页面"}), 400
 
     if conversation_ttl:
         try:
-            current_app.config["CONVERSATION_TTL_DAYS"] = int(conversation_ttl)
+            cfg.conversation_ttl_days = int(conversation_ttl)
         except ValueError:
             return jsonify({"success": True, "message": "对话保留天数格式无效，保留原值"})
 
     if handoff_timeout:
         try:
-            current_app.config["HANDOFF_TIMEOUT_MINUTES"] = int(handoff_timeout)
+            cfg.handoff_timeout_minutes = int(handoff_timeout)
         except ValueError:
             return jsonify({"success": True, "message": "接管超时时间格式无效，保留原值"})
 
-    return jsonify({"success": True, "message": "设置已保存（重启后重新加载 .env 变更）"})
+    db.session.commit()
+    # 同步更新内存缓存，确保当前进程内即时生效
+    current_app.config["CONVERSATION_TTL_DAYS"] = cfg.conversation_ttl_days
+    current_app.config["HANDOFF_TIMEOUT_MINUTES"] = cfg.handoff_timeout_minutes
+    return jsonify({"success": True, "message": "设置已保存（持久化到数据库）"})

@@ -20,7 +20,7 @@
   {% for conv in conversations %}
     <tr>
       <td><div style="font-weight:500">{{ conv.user_name[:20] }}{% if conv.user_name|length > 20 %}...{% endif %}</div>{% if conv.group_name %}<div style="font-size:11px;color:#999">{{ conv.group_name[:20] }}</div>{% endif %}</td>
-      <td><span class="tag tag-blue">{% if conv.channel == 'wechat_work' %}企业微信{% elif conv.channel == 'feishu' %}飞书{% else %}{{ conv.channel }}{% endif %}</span></td>
+      <td><span class="tag tag-blue">{% if conv.channel == 'wechat_work' %}企业微信{% elif conv.channel == 'wechat_kf' %}微信客服{% elif conv.channel == 'feishu' %}飞书{% else %}{{ conv.channel }}{% endif %}</span></td>
       <td>{{ conv.last_message[:80] }}{% if conv.last_message|length > 80 %}...{% endif %}</td>
       <td>{% if conv.status == 'active' %}<span class="tag tag-green">AI回复中</span>{% elif conv.status == 'transferred' %}<span class="tag tag-orange">待处理</span>{% else %}<span class="tag tag-gray">已关闭</span>{% endif %}</td>
       <td style="white-space:nowrap">{{ conv.last_time.strftime('%m-%d %H:%M') }}</td>

@@ -4,12 +4,12 @@
 <a href="{{ url_for('admin_config.platform_list') }}" style="display:inline-block;margin-bottom:16px;color:#4361ee;text-decoration:none;font-size:14px">← 返回渠道管理</a>
 <h1 style="font-size:20px;margin-bottom:20px">{{ '编辑配置' if config else '新增配置' }}</h1>
 <div class="card"><div class="card-body">
-<form method="POST">
+<form method="POST" id="config-form" onsubmit="return handleFormSubmit(this)">
   <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   {% if config %}
-  <div class="form-group"><label>平台类型</label><input type="text" value="{{ config.platform }}" readonly></div>
+  <div class="form-group"><label>平台类型</label><input type="text" id="platform-type" value="{{ config.platform }}" readonly></div>
   {% else %}
-  <div class="form-group"><label>平台类型</label><select name="platform" required><option value="">请选择...</option>{% for a in available %}<option value="{{ a.type }}">{{ a.name }}</option>{% endfor %}</select></div>
+  <div class="form-group"><label>平台类型</label><select name="platform" id="platform-select" required onchange="updateSchema(this.value)"><option value="">请选择...</option>{% for a in available %}<option value="{{ a.type }}">{{ a.name }}</option>{% endfor %}</select></div>
   {% endif %}
   <div class="form-group"><label>配置名称</label><input type="text" name="name" value="{{ config.name if config else '' }}" required placeholder="例如：企业微信-生产环境"></div>
   <div class="form-group"><label><input type="checkbox" name="enabled" value="1" {% if not config or config.enabled %}checked{% endif %}> 启用</label></div>
@@ -21,7 +21,14 @@
     {% for field in schema.fields %}
     <div class="form-group"><label>{{ field.label }}{% if field.required %}<span style="color:red">*</span>{% endif %}</label>
       <input type="{{ field.type }}" name="cfg_{{ field.key }}" value="{{ config.get_config().get(field.key, '') if config else '' }}" {% if field.required %}required{% endif %} {% if field.readonly %}readonly{% endif %} placeholder="{{ field.label }}">
-      {% if field.key == 'callback_url' %}<div class="hint">部署后回调地址为：https://yunzhiai-dev.ts-martech.com/api/wechat_work/callback</div>{% endif %}
+      {% if field.key == 'callback_url' %}<div class="hint" id="callback-hint">
+        {%- set pt = config.platform if config else (available[0].type if available else '') -%}
+        {%- if pt == 'wechat_kf' -%}
+          回调地址为：<code>/api/kf/callback</code>（实际域名部署后确定）
+        {%- else -%}
+          回调地址为：<code>/api/wechat_work/callback</code>（实际域名部署后确定）
+        {%- endif -%}
+      </div>{% endif %}
       {% if field.key == 'group_robot_webhook' %}<div class="hint">可选，群聊场景需要</div>{% endif %}
     </div>
     {% endfor %}
@@ -30,10 +37,85 @@
   {% endif %}
   </div>
   <div class="btn-group" style="margin-top:12px">
-    <button type="submit" class="btn btn-primary">💾 保存</button>
+    <button type="submit" class="btn btn-primary" id="save-btn">💾 保存</button>
     <a href="{{ url_for('admin_config.platform_list') }}" class="btn btn-outline">取消</a>
-    {% if config %}<button type="button" class="btn btn-outline" onclick="var f=new FormData();f.append('csrf_token',document.querySelector('input[name=csrf_token]').value);fetch('{{ url_for('admin_config.platform_test', pid=config.id) }}',{method:'POST',body:f}).then(r=>r.json()).then(d=>alert(d.message||'连接测试完成'))">📡 测试连接</button>{% endif %}
+    {% if config %}<button type="button" class="btn btn-outline" id="test-btn" onclick="testConnection(this)">📡 测试连接</button>{% endif %}
   </div>
 </form>
 </div></div>
+
+<script>
+function showToast(message, isError) {
+    var t = document.getElementById('toast');
+    if (t) {
+        t.style.background = isError ? '#d32f2f' : '#323232';
+        t.textContent = message;
+        t.style.display = 'block';
+        setTimeout(function(){ t.style.display='none'; }, 3000);
+    }
+}
+
+function handleFormSubmit(form) {
+    var btn = document.getElementById('save-btn');
+    btn.disabled = true;
+    btn.textContent = '⏳ 保存中...';
+    return true;  // 允许表单正常提交
+}
+
+function updateSchema(platformType) {
+    if (!platformType) return;
+    var container = document.getElementById('config-fields');
+    container.innerHTML = '<div style="padding:20px;text-align:center;color:#999">⏳ 加载配置字段...</div>';
+    fetch('/admin/platforms/schema/' + platformType)
+    .then(function(r){ return r.json(); })
+    .then(function(schema){
+        var html = '';
+        if (schema.fields && schema.fields.length > 0) {
+            schema.fields.forEach(function(f){
+                var readonly = f.readonly ? 'readonly' : '';
+                var required = f.required ? 'required' : '';
+                html += '<div class="form-group"><label>' + f.label + (f.required ? '<span style="color:red">*</span>' : '') + '</label>';
+                html += '<input type="' + f.type + '" name="cfg_' + f.key + '" ' + required + ' ' + readonly + ' placeholder="' + f.label + '">';
+                if (f.key === 'callback_url') {
+                    var callbackPath = platformType === 'wechat_kf'
+                        ? '/api/kf/callback'
+                        : '/api/wechat_work/callback';
+                    html += '<div class="hint">回调地址为：<code>' + callbackPath + '</code>（实际域名部署后确定）</div>';
+                }
+                if (f.key === 'group_robot_webhook') {
+                    html += '<div class="hint">可选，群聊场景需要</div>';
+                }
+                html += '</div>';
+            });
+        } else {
+            html += '<div class="status-indicator warn" style="margin-bottom:16px">⚠️ 该平台暂无配置字段</div>';
+        }
+        container.innerHTML = html;
+    })
+    .catch(function(err){
+        container.innerHTML = '<div class="status-indicator warn" style="margin-bottom:16px">⚠️ 加载配置字段失败，请刷新页面重试</div>';
+        showToast('加载配置字段失败: ' + (err.message || '网络错误'), true);
+    });
+}
+
+function testConnection(btn) {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    btn.textContent = '⏳ 测试中...';
+    var f = new FormData();
+    f.append('csrf_token', document.querySelector('input[name=csrf_token]').value);
+    fetch('{{ url_for('admin_config.platform_test', pid=config.id) }}', { method: 'POST', body: f })
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+        showToast(d.message || '连接测试完成', !d.success);
+    })
+    .catch(function(err){
+        showToast('连接测试失败: ' + (err.message || '网络错误'), true);
+    })
+    .finally(function(){
+        btn.disabled = false;
+        btn.textContent = '📡 测试连接';
+    });
+}
+</script>
 {% endblock %}

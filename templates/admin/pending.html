@@ -46,7 +46,7 @@ function doRelease(btn, userId) {
   <thead><tr><th>客户</th><th>来源</th><th>问题</th><th>时间</th><th>操作</th></tr></thead>
   <tbody>
   {% for conv in conversations %}
-    <tr><td>{{ conv.user_name[:20] }}</td><td><span class="tag tag-blue">{% if conv.channel == 'wechat_work' %}企微{% elif conv.channel == 'feishu' %}飞书{% else %}{{ conv.channel }}{% endif %}</span></td><td>{{ conv.last_message[:50] }}</td><td style="white-space:nowrap">{{ conv.last_time.strftime('%m-%d %H:%M') }}</td>
+    <tr><td>{{ conv.user_name[:20] }}</td><td><span class="tag tag-blue">{% if conv.channel == 'wechat_work' %}企微{% elif conv.channel == 'wechat_kf' %}微信客服{% elif conv.channel == 'feishu' %}飞书{% else %}{{ conv.channel }}{% endif %}</span></td><td>{{ conv.last_message[:50] }}</td><td style="white-space:nowrap">{{ conv.last_time.strftime('%m-%d %H:%M') }}</td>
     <td class="btn-group">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="btn btn-primary btn-sm" onclick="doTakeover(this,'{{ conv.user_id }}')">✋ 接管</button>
@@ -64,7 +64,7 @@ function doRelease(btn, userId) {
   <thead><tr><th>客户</th><th>来源</th><th>处理人</th><th>接管时长</th><th>操作</th></tr></thead>
   <tbody>
   {% for h in handoffs %}
-    <tr><td>{{ h.user_name or h.user_id[:20] }}</td><td><span class="tag tag-blue">{% if h.channel == 'wechat_work' %}企微{% elif h.channel == 'feishu' %}飞书{% else %}{{ h.channel }}{% endif %}</span></td><td>{{ h.handled_by or '未指定' }}</td><td>{{ h.taken_at.strftime('%H:%M') }}</td>
+    <tr><td>{{ h.user_name or h.user_id[:20] }}</td><td><span class="tag tag-blue">{% if h.channel == 'wechat_work' %}企微{% elif h.channel == 'wechat_kf' %}微信客服{% elif h.channel == 'feishu' %}飞书{% else %}{{ h.channel }}{% endif %}</span></td><td>{{ h.handled_by or '未指定' }}</td><td>{{ h.taken_at.strftime('%H:%M') }}</td>
     <td>
       <button class="btn btn-success btn-sm" onclick="doRelease(this,'{{ h.user_id }}')">✅ 释放</button>
     </td></tr>

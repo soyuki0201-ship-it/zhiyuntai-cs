@@ -43,7 +43,7 @@ function doRelease(btn) {
       <div style="font-weight:600;font-size:16px">对话 #{{ conversation.id }}</div>
       <div style="font-size:13px;color:#999;margin-top:4px">客户：<strong>{{ conversation.user_name or conversation.user_id }}</strong>
       {% if conversation.group_name %} | 群：{{ conversation.group_name }}{% endif %} |
-      渠道：{% if conversation.channel == 'wechat_work' %}企业微信{% else %}{{ conversation.channel }}{% endif %}
+      渠道：{% if conversation.channel == 'wechat_work' %}企业微信{% elif conversation.channel == 'wechat_kf' %}微信客服{% else %}{{ conversation.channel }}{% endif %}
       </div>
     </div>
     <div class="btn-group">
