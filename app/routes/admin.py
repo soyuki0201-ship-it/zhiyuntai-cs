@@ -14,7 +14,7 @@ import io
 from datetime import datetime
 from functools import wraps
 from urllib.parse import quote
-from flask import Blueprint, render_template, request, redirect, url_for, jsonify, session, Response
+from flask import Blueprint, render_template, request, redirect, url_for, jsonify, session, Response, current_app
 from app.models.models import db, Conversation, Handoff, Message, Knowledge
 from app.services.handoff_service import HandoffService
 from app.services.knowledge_service import KnowledgeService
@@ -38,6 +38,12 @@ def admin_required(f):
 def login():
     """管理后台登录页面"""
     if request.method == "POST":
+        # CSRF 校验（登录接口此前缺失）
+        token = request.headers.get("X-CSRFToken", "") or request.form.get("csrf_token", "")
+        from app.utils.csrf import verify_csrf_token
+        if not verify_csrf_token(token):
+            return render_template("admin/login.html", error="会话已过期，请刷新页面重试")
+
         from flask import current_app
         username = request.form.get("username", "")
         password = request.form.get("password", "")
@@ -383,13 +389,19 @@ def settings_save():
 
     if conversation_ttl:
         try:
-            cfg.conversation_ttl_days = int(conversation_ttl)
+            val = int(conversation_ttl)
+            if val < 1:
+                return jsonify({"success": False, "message": "对话保留天数必须 ≥ 1"}), 400
+            cfg.conversation_ttl_days = val
         except ValueError:
             return jsonify({"success": True, "message": "对话保留天数格式无效，保留原值"})
 
     if handoff_timeout:
         try:
-            cfg.handoff_timeout_minutes = int(handoff_timeout)
+            val = int(handoff_timeout)
+            if val < 1:
+                return jsonify({"success": False, "message": "接管超时时间必须 ≥ 1"}), 400
+            cfg.handoff_timeout_minutes = val
         except ValueError:
             return jsonify({"success": True, "message": "接管超时时间格式无效，保留原值"})
 

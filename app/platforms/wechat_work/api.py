@@ -17,6 +17,8 @@ class WeChatWorkAPI:
         self.agent_secret = config.get("agent_secret", "")
         self._access_token = None
         self._token_expires_at = 0
+        self._jsapi_ticket = None
+        self._jsapi_ticket_expires_at = 0
 
     def get_access_token(self) -> str:
         now = time.time()
@@ -69,3 +71,35 @@ class WeChatWorkAPI:
         if data.get("errcode") != 0:
             return None
         return data.get("external_contact")
+
+    def get_jsapi_ticket(self) -> str:
+        """获取 JS-SDK jsapi_ticket（带缓存，7200s 有效期，提前 60s 刷新）
+
+        JS-SDK 签名（wx.config）依赖此 ticket。企微自建应用 H5 接入微信客服时使用。
+        """
+        now = time.time()
+        if self._jsapi_ticket and now < self._jsapi_ticket_expires_at - 60:
+            return self._jsapi_ticket
+
+        token = self.get_access_token()
+        url = f"{self.BASE_URL}/get_jsapi_ticket"
+        resp = requests.get(url, params={"access_token": token}, timeout=10)
+        data = resp.json()
+
+        if data.get("errcode") != 0:
+            raise Exception(f"获取 jsapi_ticket 失败: {data.get('errmsg')}")
+
+        self._jsapi_ticket = data["ticket"]
+        self._jsapi_ticket_expires_at = now + data.get("expires_in", 7200)
+        return self._jsapi_ticket
+
+    @staticmethod
+    def generate_jsapi_signature(jsapi_ticket: str, url: str,
+                                 nonce_str: str, timestamp: str) -> str:
+        """生成 JS-SDK 签名（SHA1）
+
+        签名串格式：jsapi_ticket={ticket}&noncestr={nonce}&timestamp={ts}&url={url}
+        """
+        import hashlib
+        raw = f"jsapi_ticket={jsapi_ticket}&noncestr={nonce_str}&timestamp={timestamp}&url={url}"
+        return hashlib.sha1(raw.encode("utf-8")).hexdigest()

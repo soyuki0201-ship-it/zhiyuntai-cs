@@ -313,7 +313,7 @@ function saveConfig() {
     var form = document.getElementById('config-form');
     var data = new FormData(form);
     data.append('system_prompt', document.querySelector('[name=system_prompt]').value);
-    data.append('handoff_markers', '');
+    // 不提交 handoff_markers（此处无对应输入框，避免清空用户已配置的转人工关键词）
     data.append('rag_top_k', document.getElementById('rag_top_k').value);
     data.append('rag_similarity_threshold', document.getElementById('rag_similarity_threshold').value);
     fetch('/admin/ai-config/config', { method: 'POST', body: data })

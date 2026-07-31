@@ -34,14 +34,15 @@ def create_app(config_class=Config):
     from app.routes.ai_config import ai_config_bp
     from app.routes.kf_callback import kf_bp
 
+    # 为所有管理后台 Blueprint 注册公共 context_processor（注入 csrf_token 和 pending_count）
+    # 必须在 register_blueprint 之前完成，否则 Flask 2.3+ 会抛出 AssertionError
+    _register_admin_context_processors(app, [admin_bp, admin_config_bp, ai_config_bp])
+
     app.register_blueprint(api_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(admin_config_bp)
     app.register_blueprint(ai_config_bp)
     app.register_blueprint(kf_bp)
-
-    # 为所有管理后台 Blueprint 注册公共 context_processor（注入 csrf_token 和 pending_count）
-    _register_admin_context_processors(app, [admin_bp, admin_config_bp, ai_config_bp])
 
     # 旧路由：已下线，通过新统一入口 /api/wechat_work/callback 处理
     # 保留 callback.py / group_robot.py 文件用于参考，后续版本删除

@@ -85,20 +85,22 @@ function doImport() {
   fetch('{{ url_for("admin.knowledge_import") }}', { method: 'POST', body: fd })
   .then(function(r){return r.json()})
   .then(function(d){
+    // 转义用户可控文本，防止 CSV 内容注入 HTML（XSS）
+    function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
     if(d.success){
-      var html = '<div style="font-size:15px;font-weight:600">成功导入 <span style="color:#52c41a">'+d.success_count+'</span> 条，失败 <span style="color:#ef5350">'+d.fail_count+'</span> 条</div>';
+      var html = '<div style="font-size:15px;font-weight:600">成功导入 <span style="color:#52c41a">'+esc(d.success_count)+'</span> 条，失败 <span style="color:#ef5350">'+esc(d.fail_count)+'</span> 条</div>';
       if(d.errors && d.errors.length){
         html += '<div style="margin-top:8px;font-size:13px;color:#666"><ul>';
-        d.errors.forEach(function(e){html += '<li style="list-style:none;padding:2px 0">⚠ '+e+'</li>'});
+        d.errors.forEach(function(e){html += '<li style="list-style:none;padding:2px 0">⚠ '+esc(e)+'</li>'});
         html += '</ul></div>';
       }
       document.getElementById('result').className = 'card-body';
       document.getElementById('result').innerHTML = html;
     } else {
-      document.getElementById('result').innerHTML = '<div style="color:#ef5350">❌ '+(d.message||'导入失败')+'</div>';
+      document.getElementById('result').innerHTML = '<div style="color:#ef5350">❌ '+esc(d.message||'导入失败')+'</div>';
     }
   }).catch(function(e){
-    document.getElementById('result').innerHTML = '<div style="color:#ef5350">❌ 网络错误：'+e.message+'</div>';
+    document.getElementById('result').innerHTML = '<div style="color:#ef5350">❌ 网络错误：'+esc(e.message)+'</div>';
     showToast('导入失败：'+e.message, true);
   }).finally(function(){ importing = false; btn.disabled = false; btn.textContent = '📤 上传并导入'; });
 }

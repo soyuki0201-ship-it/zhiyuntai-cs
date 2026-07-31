@@ -185,17 +185,39 @@ def ai_system_config_save():
     if not config:
         config = _init_default_config()
 
-    system_prompt = request.form.get("system_prompt", "").strip()
-    handoff_markers = request.form.get("handoff_markers", "").strip()
-
-    config.ai_name = request.form.get("ai_name", "智云台助手").strip()
-    config.temperature = float(request.form.get("temperature", 0.7))
-    config.max_tokens = int(request.form.get("max_tokens", 2000))
-    config.max_history_rounds = int(request.form.get("max_history_rounds", 10))
-    config.system_prompt = system_prompt
-    config.handoff_markers = handoff_markers
-    config.rag_top_k = int(request.form.get("rag_top_k", 5))
-    config.rag_similarity_threshold = float(request.form.get("rag_similarity_threshold", 0.6))
+    # 只更新请求中提交的字段，避免「保存提示词」/「保存RAG」等局部保存
+    # 用默认值覆盖未提交的其他配置（历史 bug：点保存提示词会重置 temperature 等）
+    if request.form.get("ai_name") is not None:
+        config.ai_name = request.form.get("ai_name", "").strip() or "智云台助手"
+    if request.form.get("temperature") is not None:
+        try:
+            config.temperature = float(request.form.get("temperature"))
+        except ValueError:
+            pass  # 非法输入保留原值
+    if request.form.get("max_tokens") is not None:
+        try:
+            config.max_tokens = int(request.form.get("max_tokens"))
+        except ValueError:
+            pass
+    if request.form.get("max_history_rounds") is not None:
+        try:
+            config.max_history_rounds = int(request.form.get("max_history_rounds"))
+        except ValueError:
+            pass
+    if request.form.get("system_prompt") is not None:
+        config.system_prompt = request.form.get("system_prompt", "").strip()
+    if request.form.get("handoff_markers") is not None:
+        config.handoff_markers = request.form.get("handoff_markers", "").strip()
+    if request.form.get("rag_top_k") is not None:
+        try:
+            config.rag_top_k = int(request.form.get("rag_top_k"))
+        except ValueError:
+            pass
+    if request.form.get("rag_similarity_threshold") is not None:
+        try:
+            config.rag_similarity_threshold = float(request.form.get("rag_similarity_threshold"))
+        except ValueError:
+            pass
     db.session.commit()
     return jsonify({"success": True, "message": "对话参数已保存"})
 

@@ -93,6 +93,11 @@ def _get_or_create_conversation(user_id: str, user_name: str, group_id: str | No
 def _handle_ai_response(conversation: Conversation, message: UnifiedMessage) -> UnifiedReply | None:
     """处理 AI 回复（与外部调用者共享同一事务）
 
+    职责编排：
+    1. 构建检索上下文（历史 + RAG 知识）
+    2. 调用 AI 生成回复
+    3. 判断转人工 / 自动回复
+
     注意：不在此方法内 commit()。由 process_unified_message 统一 commit。
     返回待发送的 UnifiedReply（commit 成功后执行发送），转人工时返回 None。
 
@@ -101,30 +106,19 @@ def _handle_ai_response(conversation: Conversation, message: UnifiedMessage) -> 
     """
     try:
         content = message.content.strip()
-        # 先读历史（既用于增强检索，也用于最终Prompt）
         history = get_conversation_history(conversation.id)
+        knowledge_chunks = _retrieve_knowledge(content, history)
+        reply = _generate_ai_reply(content, history, knowledge_chunks, message.user_id)
 
-        # 简短输入（<5字）跳过 RAG 检索
-        if len(content) >= 5:
-            enhanced_query = _build_enhanced_query(content, history)
-            knowledge_chunks = KnowledgeService.search(enhanced_query)
-        else:
-            knowledge_chunks = []
-
-        handoff = HandoffService.get_handoff(message.user_id)
-        is_waiting = handoff is not None
-        messages = PromptBuilder.build_messages(user_input=content, knowledge_chunks=knowledge_chunks, conversation_history=history, is_handoff_waiting=is_waiting)
-        ai_service = _get_ai_service()
-        reply = ai_service.chat(messages)
-        should_handoff = PromptBuilder.check_should_handoff(reply)
-        if should_handoff:
+        if PromptBuilder.check_should_handoff(reply):
+            # 转人工：保存回复 + 创建接管记录 + 标记对话状态
             _save_message(conversation.id, "assistant", reply, "text", message.platform)
             HandoffService.take_over(message.user_id, is_auto=True)
             conversation.status = "transferred"
             return None  # 转人工，不自动回复
         else:
+            # 自动回复：保存回复并返回统一回复模型，由外层 commit 成功后发送
             _save_message(conversation.id, "assistant", reply, "text", message.platform)
-            # 返回统一回复模型，由外层 commit 成功后发送
             return UnifiedReply(
                 platform=message.platform,
                 user_id=message.user_id,
@@ -134,6 +128,35 @@ def _handle_ai_response(conversation: Conversation, message: UnifiedMessage) -> 
     except Exception as e:
         logger.error(f"AI处理异常: {e}", exc_info=True)
         raise  # 让上层统一处理事务回滚
+
+
+def _retrieve_knowledge(content: str, history: list[dict]) -> list:
+    """构建检索上下文并检索 RAG 知识
+
+    - 简短输入（<5字）跳过 RAG 检索
+    - 短追问（≤8字）自动拼上历史上下文增强检索
+    """
+    if len(content) < 5:
+        return []
+    enhanced_query = _build_enhanced_query(content, history)
+    return KnowledgeService.search(enhanced_query)
+
+
+def _generate_ai_reply(content: str, history: list[dict], knowledge_chunks: list, user_id: str) -> str:
+    """调用 AI 生成回复（含转人工等待期策略）
+
+    转人工等待期间：AI 继续安抚客户、回答知识范围内问题，但不做承诺。
+    """
+    handoff = HandoffService.get_handoff(user_id)
+    is_waiting = handoff is not None
+    messages = PromptBuilder.build_messages(
+        user_input=content,
+        knowledge_chunks=knowledge_chunks,
+        conversation_history=history,
+        is_handoff_waiting=is_waiting,
+    )
+    ai_service = _get_ai_service()
+    return ai_service.chat(messages)
 
 
 def _build_enhanced_query(current_input: str, history: list[dict]) -> str:
@@ -188,7 +211,9 @@ def get_conversation_history(conversation_id: int, max_rounds: int = None) -> li
     msgs = Message.query.filter(
         Message.conversation_id == conversation_id,
         Message.role.in_(["user", "assistant"]),
-    ).order_by(Message.created_at.asc()).limit(max_rounds * 2).all()
+    ).order_by(Message.id.desc()).limit(max_rounds * 2).all()
+    # 倒序取出的是"最近的 N*2 条"，反转成正序（先发的在前）
+    msgs.reverse()
     history = []
     for m in msgs:
         role = "user" if m.role == "user" else "assistant"

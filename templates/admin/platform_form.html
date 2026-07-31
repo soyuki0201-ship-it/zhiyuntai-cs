@@ -59,7 +59,40 @@ function handleFormSubmit(form) {
     var btn = document.getElementById('save-btn');
     btn.disabled = true;
     btn.textContent = '⏳ 保存中...';
-    return true;  // 允许表单正常提交
+    // 改为 fetch 提交：成功跳转列表页，失败 toast 显示后端错误信息
+    var fd = new FormData(form);
+    fetch(form.action || window.location.href, { method: 'POST', body: fd })
+    .then(function(r){
+        var ct = r.headers.get('content-type') || '';
+        // 后端成功时 redirect 到列表页（fetch 跟随重定向后 r.redirected=true）
+        if (r.redirected) {
+            window.location.href = r.url;
+            return;
+        }
+        // 后端返回 JSON（CSRF 校验失败 / 参数错误等），展示错误信息
+        if (ct.indexOf('application/json') >= 0) {
+            return r.json().then(function(d){
+                showToast(d.message || '保存失败', true);
+                btn.disabled = false;
+                btn.textContent = '💾 保存';
+            });
+        }
+        // 其他非成功响应（如 500 HTML）
+        if (!r.ok) {
+            showToast('保存失败 (HTTP ' + r.status + ')', true);
+            btn.disabled = false;
+            btn.textContent = '💾 保存';
+            return;
+        }
+        // 未重定向的 HTML 成功响应，直接跳列表页
+        window.location.href = '{{ url_for('admin_config.platform_list') }}';
+    })
+    .catch(function(err){
+        showToast('保存失败: ' + (err.message || '网络错误'), true);
+        btn.disabled = false;
+        btn.textContent = '💾 保存';
+    });
+    return false;  // 阻止默认表单提交
 }
 
 function updateSchema(platformType) {
@@ -98,6 +131,7 @@ function updateSchema(platformType) {
     });
 }
 
+{% if config %}
 function testConnection(btn) {
     if (btn.disabled) return;
     btn.disabled = true;
@@ -117,5 +151,6 @@ function testConnection(btn) {
         btn.textContent = '📡 测试连接';
     });
 }
+{% endif %}
 </script>
 {% endblock %}

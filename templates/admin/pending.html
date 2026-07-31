@@ -49,7 +49,7 @@ function doRelease(btn, userId) {
     <tr><td>{{ conv.user_name[:20] }}</td><td><span class="tag tag-blue">{% if conv.channel == 'wechat_work' %}企微{% elif conv.channel == 'wechat_kf' %}微信客服{% elif conv.channel == 'feishu' %}飞书{% else %}{{ conv.channel }}{% endif %}</span></td><td>{{ conv.last_message[:50] }}</td><td style="white-space:nowrap">{{ conv.last_time.strftime('%m-%d %H:%M') }}</td>
     <td class="btn-group">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button class="btn btn-primary btn-sm" onclick="doTakeover(this,'{{ conv.user_id }}')">✋ 接管</button>
+      <button class="btn btn-primary btn-sm" onclick='doTakeover(this, {{ conv.user_id | tojson }})'>✋ 接管</button>
       <a href="{{ url_for('admin.conversation_detail', conv_id=conv.id, from='pending') }}" class="btn btn-outline btn-sm">查看</a>
     </td></tr>
   {% endfor %}
@@ -66,7 +66,7 @@ function doRelease(btn, userId) {
   {% for h in handoffs %}
     <tr><td>{{ h.user_name or h.user_id[:20] }}</td><td><span class="tag tag-blue">{% if h.channel == 'wechat_work' %}企微{% elif h.channel == 'wechat_kf' %}微信客服{% elif h.channel == 'feishu' %}飞书{% else %}{{ h.channel }}{% endif %}</span></td><td>{{ h.handled_by or '未指定' }}</td><td>{{ h.taken_at.strftime('%H:%M') }}</td>
     <td>
-      <button class="btn btn-success btn-sm" onclick="doRelease(this,'{{ h.user_id }}')">✅ 释放</button>
+      <button class="btn btn-success btn-sm" onclick='doRelease(this, {{ h.user_id | tojson }})'>✅ 释放</button>
     </td></tr>
   {% endfor %}
   </tbody>

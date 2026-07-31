@@ -18,6 +18,10 @@ from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
 
+# 单个事件从 processing 开始的最长处理时间（秒）
+# 超过该时间仍未 done/release 视为 worker 已崩溃，回收为 pending 重试
+_PROCESSING_TIMEOUT_SECONDS = 300
+
 
 def enqueue_event(event_data: dict) -> int:
     """将回调事件写入消息队列
@@ -46,14 +50,26 @@ def enqueue_event(event_data: dict) -> int:
 def process_queue(app):
     """轮询处理消息队列（在后台线程中运行）
 
-    从 kf_queue 表拉取 pending 事件，逐个处理。
-    处理完成后更新 status=done。
+    多 worker 原子消费策略：
+    1. SELECT 拉取 pending 事件（最多 10 条）
+    2. 对每条执行原子抢占：UPDATE status='processing' WHERE id=:id AND status='pending'
+       - rowcount=1 表示本 worker 抢占成功，才处理该事件
+       - rowcount=0 表示已被其他 worker 抢占，跳过
+    3. 处理完成后 status=done
+
+    崩溃恢复：
+    - 抢占 processing 后若 worker 进程崩溃（OOM/重启），_release_event 不会执行。
+    - 每次轮询先回收超过 _PROCESSING_TIMEOUT_SECONDS 仍停留在 processing 的事件，
+      回退为 pending，避免消息永久丢失。
 
     Args:
         app: Flask 应用实例（用于获取 app_context）
     """
     with app.app_context():
         try:
+            # 崩溃恢复：回收超时的 processing 僵尸事件
+            _recover_stale_processing()
+
             # 拉取 pending 事件（每次最多 10 条）
             events = db.session.execute(
                 text("SELECT id, event_data FROM kf_queue WHERE status = 'pending' ORDER BY id ASC LIMIT 10")
@@ -65,13 +81,76 @@ def process_queue(app):
             logger.info(f"消息队列: 发现 {len(events)} 个待处理事件")
 
             for row in events:
+                # 原子抢占：只有抢占成功的 worker 才处理，防止多 worker 重复消费
+                if not _claim_event(row.id):
+                    continue
                 try:
                     _process_event(app, row.id, row.event_data)
                 except Exception as e:
-                    logger.error(f"处理事件失败: id={row.id}, error={e}")
+                    logger.error(f"处理事件失败: id={row.id}, error={e}", exc_info=True)
+                    # 处理异常：回退为 pending，便于后续重试（但避免无限重试风暴）
+                    _release_event(row.id)
 
         except Exception as e:
             logger.error(f"队列轮询异常: {e}")
+
+
+def _recover_stale_processing():
+    """回收超时未完成的 processing 僵尸事件（worker 崩溃恢复）
+
+    worker 抢占 processing 后若进程被杀，事件会永远停留在 processing。
+    将超过 _PROCESSING_TIMEOUT_SECONDS 的事件回退为 pending，供其他 worker 重试。
+
+    时区说明：MySQL 的 updated_at 用 CURRENT_TIMESTAMP（服务器时区=北京时间 CST/UTC+8），
+    Python 端必须用同一时区比较，否则会产生 8 小时偏差导致回收延迟。
+    Docker 容器默认时区可能是 UTC，所以显式用北京时间。
+    """
+    try:
+        from datetime import datetime, timedelta, timezone
+        cst = timezone(timedelta(hours=8))  # 北京时间
+        timeout_ts = (datetime.now(cst) - timedelta(seconds=_PROCESSING_TIMEOUT_SECONDS)).strftime("%Y-%m-%d %H:%M:%S")
+        result = db.session.execute(
+            text("UPDATE kf_queue SET status = 'pending' WHERE status = 'processing' AND updated_at < :timeout_ts"),
+            {"timeout_ts": timeout_ts},
+        )
+        db.session.commit()
+        if result.rowcount > 0:
+            logger.warning(f"消息队列: 回收 {result.rowcount} 个超时未完成的僵尸事件")
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"回收僵尸事件失败: {e}")
+
+
+def _claim_event(event_id: int) -> bool:
+    """原子抢占事件：pending → processing
+
+    Returns:
+        bool: True 表示抢占成功，False 表示已被其他 worker 抢占
+    """
+    try:
+        result = db.session.execute(
+            text("UPDATE kf_queue SET status = 'processing' WHERE id = :id AND status = 'pending'"),
+            {"id": event_id},
+        )
+        db.session.commit()
+        return result.rowcount == 1
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"抢占事件失败: id={event_id}, error={e}")
+        return False
+
+
+def _release_event(event_id: int):
+    """释放事件：processing → pending（处理失败时回退，便于重试）"""
+    try:
+        db.session.execute(
+            text("UPDATE kf_queue SET status = 'pending' WHERE id = :id AND status = 'processing'"),
+            {"id": event_id},
+        )
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"释放事件失败: id={event_id}, error={e}")
 
 
 def _process_event(app, event_id: int, event_data_str: str):
@@ -163,10 +242,10 @@ def _process_event(app, event_id: int, event_data_str: str):
 
 
 def _mark_done(event_id: int):
-    """标记队列事件为已完成"""
+    """标记队列事件为已完成（processing → done）"""
     try:
         db.session.execute(
-            text("UPDATE kf_queue SET status = 'done' WHERE id = :id AND status = 'pending'"),
+            text("UPDATE kf_queue SET status = 'done' WHERE id = :id AND status = 'processing'"),
             {"id": event_id},
         )
         db.session.commit()
@@ -176,10 +255,10 @@ def _mark_done(event_id: int):
 
 
 def get_pending_count() -> int:
-    """获取待处理的队列事件数量"""
+    """获取待处理的队列事件数量（pending + processing 均视为未完成）"""
     try:
         count = db.session.execute(
-            text("SELECT COUNT(*) FROM kf_queue WHERE status = 'pending'")
+            text("SELECT COUNT(*) FROM kf_queue WHERE status IN ('pending', 'processing')")
         ).scalar()
         return count or 0
     except Exception:

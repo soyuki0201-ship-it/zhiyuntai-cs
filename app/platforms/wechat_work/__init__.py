@@ -32,7 +32,7 @@ class WeChatWorkPlatform(PlatformInterface):
             self._crypto = WeChatWorkCrypto(
                 token=cfg.get("token", ""),
                 encoding_aes_key=cfg.get("encoding_aes_key", ""),
-                corp_id=cfg.get("corp_id", ""),
+                receive_id=cfg.get("corp_id", ""),
             )
         return self._crypto
 

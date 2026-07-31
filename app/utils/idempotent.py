@@ -28,15 +28,13 @@ def is_duplicate(msgid: str) -> bool:
     if not msgid:
         return False
     try:
-        db.session.execute(
+        result = db.session.execute(
             text("INSERT IGNORE INTO kf_msg_log (msgid) VALUES (:msgid)"),
             {"msgid": msgid},
         )
         db.session.commit()
         # 影响行数为 0 说明 msgid 已存在（重复）
-        return db.session.execute(
-            text("SELECT ROW_COUNT() as rc")
-        ).scalar() == 0
+        return result.rowcount == 0
     except Exception as e:
         db.session.rollback()
         logger.error(f"幂等去重检查失败: {e}")

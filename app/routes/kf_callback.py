@@ -15,6 +15,7 @@ import logging
 import xml.etree.ElementTree as ET
 from flask import Blueprint, request, Response
 from app.core.platform_manager import get_platform
+from app.utils.rate_limit import rate_limit
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +23,7 @@ kf_bp = Blueprint("kf", __name__, url_prefix="/api/kf")
 
 
 @kf_bp.route("/callback", methods=["GET", "POST"])
+@rate_limit(max_requests=60, window_seconds=60)
 def kf_callback():
     """微信客服回调统一入口
 

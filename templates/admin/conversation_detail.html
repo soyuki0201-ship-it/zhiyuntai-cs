@@ -7,7 +7,7 @@ function doTakeover(btn) {
     if (!confirm('确认接管该客户？')) return;
     btn = _btn(btn); btn.disabled = true; btn.textContent = '⏳ 接管中...';
     var f = new FormData();
-    f.append('user_id', '{{ conversation.user_id }}');
+    f.append('user_id', {{ conversation.user_id | tojson }});
     f.append('csrf_token', document.querySelector('input[name=csrf_token]').value);
     fetch('{{ url_for("admin.takeover") }}', { method: 'POST', body: f })
     .then(function(r){ return r.json(); })
@@ -22,7 +22,7 @@ function doRelease(btn) {
     if (!confirm('确认释放该客户？')) return;
     btn = _btn(btn); btn.disabled = true; btn.textContent = '⏳ 释放中...';
     var f = new FormData();
-    f.append('user_id', '{{ conversation.user_id }}');
+    f.append('user_id', {{ conversation.user_id | tojson }});
     f.append('csrf_token', document.querySelector('input[name=csrf_token]').value);
     fetch('{{ url_for("admin.release") }}', { method: 'POST', body: f })
     .then(function(r){ return r.json(); })

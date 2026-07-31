@@ -48,9 +48,17 @@ def platform_add():
         name = request.form.get("name", "")
         enabled = request.form.get("enabled", "1") == "1"
 
+        # 服务端必填校验（防止直接 POST 空数据入库脏数据）
+        if not platform:
+            return jsonify({"success": False, "message": "请选择平台类型"}), 400
+        if not name or not name.strip():
+            return jsonify({"success": False, "message": "请填写配置名称"}), 400
+        platform_cls = get_platform_class(platform)
+        if not platform_cls:
+            return jsonify({"success": False, "message": f"未知平台类型: {platform}"}), 400
+
         # 收集动态配置项
         config_json = {}
-        platform_cls = get_platform_class(platform)
         if platform_cls:
             schema = platform_cls({}).get_config_schema()
             for field in schema.get("fields", []):

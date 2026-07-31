@@ -1,8 +1,16 @@
 """ChromaDB 向量数据库初始化
 
 在应用启动时加载 Embedding 模型并初始化向量库。
+
+多进程并发写保护：
+- ChromaDB PersistentClient 底层用 SQLite 存储，多个 Gunicorn worker 进程同时写
+  同一持久化目录会触发 SQLite 写锁冲突（database is locked）导致 500。
+- 写操作（add/delete）统一通过 _with_write_lock 获取跨进程文件锁串行化，
+  并带短重试兜底，避免瞬时锁冲突。
+- 读操作（search）不需要锁。
 """
 import os
+import time
 import logging
 from chromadb import PersistentClient
 from chromadb.config import Settings
@@ -13,6 +21,55 @@ logger = logging.getLogger(__name__)
 # Global instances
 _vector_collection = None
 _embedding_model = None
+_LOCK_FILE = None  # 跨进程写锁文件路径（init 时设置）
+_WRITE_RETRIES = 5
+_WRITE_RETRY_DELAY = 0.2
+
+
+def _get_lock_file() -> str:
+    """获取跨进程写锁文件路径（与持久化目录同级）"""
+    global _LOCK_FILE
+    if _LOCK_FILE is None:
+        persist_dir = os.getenv("CHROMA_PERSIST_DIR", "")
+        if not persist_dir:
+            import app.config as _cfg
+            persist_dir = _cfg.Config.CHROMA_PERSIST_DIR
+        _LOCK_FILE = os.path.join(persist_dir, ".write.lock")
+    return _LOCK_FILE
+
+
+def _with_write_lock(fn, *args, **kwargs):
+    """跨进程文件锁包裹写操作（fcntl 仅 Unix；Windows 环境退化为直接执行）
+
+    多个 worker 写同一个 SQLite 文件时串行化，避免 database is locked。
+    """
+    try:
+        import fcntl  # Unix
+    except ImportError:
+        fcntl = None  # Windows 等环境
+
+    lock_path = _get_lock_file()
+    os.makedirs(os.path.dirname(lock_path), exist_ok=True)
+
+    # 重试几次，兜底瞬时锁冲突
+    last_err = None
+    for attempt in range(_WRITE_RETRIES):
+        try:
+            if fcntl is None:
+                return fn(*args, **kwargs)
+            with open(lock_path, "w") as lock_f:
+                fcntl.flock(lock_f, fcntl.LOCK_EX)
+                try:
+                    return fn(*args, **kwargs)
+                finally:
+                    fcntl.flock(lock_f, fcntl.LOCK_UN)
+        except Exception as e:
+            last_err = e
+            if "locked" in str(e).lower() or "database is locked" in str(e).lower():
+                time.sleep(_WRITE_RETRY_DELAY * (attempt + 1))
+                continue
+            raise
+    raise last_err
 
 
 def init_vector_store(persist_dir: str, model_name: str = "BAAI/bge-small-zh"):
@@ -22,10 +79,11 @@ def init_vector_store(persist_dir: str, model_name: str = "BAAI/bge-small-zh"):
         persist_dir: ChromaDB 持久化目录
         model_name: Embedding 模型名称
     """
-    global _vector_collection, _embedding_model
+    global _vector_collection, _embedding_model, _LOCK_FILE
 
-    # 确保持久化目录存在
+    # 确保持久化目录存在（含写锁目录）
     os.makedirs(persist_dir, exist_ok=True)
+    _LOCK_FILE = os.path.join(persist_dir, ".write.lock")
 
     # 初始化 ChromaDB 客户端
     client = PersistentClient(
@@ -117,20 +175,27 @@ def add_knowledge(doc_id: str, text: str, metadata: dict = None):
     if _vector_collection is None:
         raise RuntimeError("Vector store not initialized.")
 
-    embedding = embed_texts([text])[0]
-    _vector_collection.add(
-        ids=[doc_id],
-        embeddings=[embedding],
-        documents=[text],
-        metadatas=[metadata or {}],
-    )
+    def _do_add():
+        embedding = embed_texts([text])[0]
+        _vector_collection.add(
+            ids=[doc_id],
+            embeddings=[embedding],
+            documents=[text],
+            metadatas=[metadata or {}],
+        )
+
+    _with_write_lock(_do_add)
 
 
 def delete_knowledge(doc_id: str):
     """从向量库中删除知识"""
     if _vector_collection is None:
         raise RuntimeError("Vector store not initialized.")
-    _vector_collection.delete(ids=[doc_id])
+
+    def _do_delete():
+        _vector_collection.delete(ids=[doc_id])
+
+    _with_write_lock(_do_delete)
 
 
 def delete_knowledge_chunks(knowledge_id: int, max_chunks: int = 1000):
@@ -140,14 +205,17 @@ def delete_knowledge_chunks(knowledge_id: int, max_chunks: int = 1000):
         knowledge_id: 知识 ID（对应 MySQL knowledge 表 id）
         max_chunks: 最大预期切片数（安全上限）
     """
-    candidate_ids = [f"{knowledge_id}_{i}" for i in range(max_chunks)]
-    # 查询实际存在的 ID
-    existing = _vector_collection.get(ids=candidate_ids)
-    if existing and existing["ids"]:
-        _vector_collection.delete(ids=existing["ids"])
-        logger.info(f"已删除知识 {knowledge_id} 的 {len(existing['ids'])} 个旧切片")
-        return len(existing["ids"])
-    return 0
+    def _do_delete_chunks():
+        candidate_ids = [f"{knowledge_id}_{i}" for i in range(max_chunks)]
+        # 查询实际存在的 ID
+        existing = _vector_collection.get(ids=candidate_ids)
+        if existing and existing["ids"]:
+            _vector_collection.delete(ids=existing["ids"])
+            logger.info(f"已删除知识 {knowledge_id} 的 {len(existing['ids'])} 个旧切片")
+            return len(existing["ids"])
+        return 0
+
+    return _with_write_lock(_do_delete_chunks)
 
 
 def update_knowledge(doc_id: str, text: str, metadata: dict = None):
