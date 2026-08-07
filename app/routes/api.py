@@ -5,6 +5,7 @@
 
 平台标识从URL路径中提取，自动路由到对应平台的 handler。
 """
+import os
 import logging
 from flask import Blueprint, request, Response, current_app
 from threading import Thread
@@ -15,6 +16,31 @@ from app.utils.rate_limit import rate_limit
 
 logger = logging.getLogger(__name__)
 api_bp = Blueprint("api", __name__, url_prefix="/api")
+
+# 独立 Blueprint：域名校验文件（根路径，不在 /api 下）
+verify_bp = Blueprint("verify", __name__)
+
+
+@verify_bp.route("/WW_verify_<filename>.txt")
+def wechat_work_verify(filename):
+    """企微可信域名校验文件（应用层响应，不依赖 nginx 配置）"""
+    verify_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "www")
+    filepath = os.path.join(verify_dir, f"WW_verify_{filename}.txt")
+    if os.path.isfile(filepath):
+        with open(filepath, "r", encoding="utf-8") as f:
+            return Response(f.read(), mimetype="text/plain")
+    return "Not Found", 404
+
+
+@verify_bp.route("/MP_verify_<filename>.txt")
+def mp_verify(filename):
+    """公众号可信域名校验文件"""
+    verify_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "www")
+    filepath = os.path.join(verify_dir, f"MP_verify_{filename}.txt")
+    if os.path.isfile(filepath):
+        with open(filepath, "r", encoding="utf-8") as f:
+            return Response(f.read(), mimetype="text/plain")
+    return "Not Found", 404
 
 
 @api_bp.route("/<platform>/callback", methods=["GET", "POST"])

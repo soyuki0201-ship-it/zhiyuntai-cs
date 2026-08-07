@@ -28,7 +28,7 @@ def create_app(config_class=Config):
     db.init_app(app)
 
     # Register routes
-    from app.routes.api import api_bp
+    from app.routes.api import api_bp, verify_bp
     from app.routes.admin import admin_bp
     from app.routes.platform_configs import admin_config_bp
     from app.routes.ai_config import ai_config_bp
@@ -38,6 +38,7 @@ def create_app(config_class=Config):
     # 必须在 register_blueprint 之前完成，否则 Flask 2.3+ 会抛出 AssertionError
     _register_admin_context_processors(app, [admin_bp, admin_config_bp, ai_config_bp])
 
+    app.register_blueprint(verify_bp)
     app.register_blueprint(api_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(admin_config_bp)
