@@ -58,7 +58,16 @@ class WeChatWorkPlatform(PlatformInterface):
             crypto = self._get_crypto()
             crypto.decrypt_message(msg_signature, timestamp, nonce, encrypted_xml)
             return True
-        except Exception:
+        except Exception as e:
+            # 记录详细诊断信息（不暴露完整密钥，只显示前6位用于对比）
+            logger.warning(
+                f"verify_request 验签失败: {type(e).__name__}: {e} | "
+                f"当前配置 token(前6)={self._config.get('token', '')[:6]}... "
+                f"aes_key(前6)={self._config.get('encoding_aes_key', '')[:6]}... "
+                f"corp_id={self._config.get('corp_id', '')} "
+                f"xml_len={len(encrypted_xml)}",
+                exc_info=True
+            )
             return False
 
     def parse_message(self, request) -> UnifiedMessage:
