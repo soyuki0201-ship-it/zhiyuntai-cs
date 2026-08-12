@@ -45,7 +45,8 @@ class WecomMsgCrypto:
         plain_text = self._decrypt(echo_str)
         msg_len = struct.unpack(">I", plain_text[16:20])[0]
         msg_content = plain_text[20:20 + msg_len].decode("utf-8")
-        recv_id = plain_text[20 + msg_len:].decode("utf-8")
+        # 精确截取 receive_id（长度 = self.receive_id 长度），忽略尾部 padding
+        recv_id = plain_text[20 + msg_len:20 + msg_len + len(self.receive_id)].decode("utf-8")
         if recv_id != self.receive_id:
             raise ValueError("Receive ID mismatch")
         return msg_content
@@ -63,7 +64,8 @@ class WecomMsgCrypto:
         plain_text = self._decrypt(encrypt_text)
         msg_len = struct.unpack(">I", plain_text[16:20])[0]
         msg_content = plain_text[20:20 + msg_len].decode("utf-8")
-        recv_id = plain_text[20 + msg_len:].decode("utf-8")
+        # 精确截取 receive_id（长度 = self.receive_id 长度），忽略尾部 padding
+        recv_id = plain_text[20 + msg_len:20 + msg_len + len(self.receive_id)].decode("utf-8")
         if recv_id != self.receive_id:
             raise ValueError("Receive ID mismatch")
         return msg_content
