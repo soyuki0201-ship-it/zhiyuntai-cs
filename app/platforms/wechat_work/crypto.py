@@ -123,8 +123,16 @@ class WecomMsgCrypto:
         cipher = Cipher(algorithms.AES(self.aes_key), modes.CBC(self.aes_key[:16]))
         decryptor = cipher.decryptor()
         decrypted = decryptor.update(encrypted) + decryptor.finalize()
-        unpadder = padding.PKCS7(128).unpadder()
-        return unpadder.update(decrypted) + unpadder.finalize()
+        # 先尝试标准 PKCS7 unpadding（兼容标准实现）
+        try:
+            unpadder = padding.PKCS7(128).unpadder()
+            return unpadder.update(decrypted) + unpadder.finalize()
+        except ValueError:
+            # PKCS7 失败：企微实际使用空格(0x20)填充而非标准PKCS7
+            # 这是因为企微在 receive_id 之后用空格填充到 AES 块大小倍数
+            # cryptography 库的 PKCS7 校验严格（padding长度≤16），会拒绝这种padding
+            # 去除末尾的空格填充（安全：企微明文末尾是 receive_id，不含尾部空格）
+            return decrypted.rstrip(b'\x20')
 
 
 # 保留别名，向后兼容
