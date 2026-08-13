@@ -63,7 +63,8 @@ def platform_callback(platform: str):
     if request.method == "GET":
         try:
             # 平台模块自己处理验证逻辑
-            from flask import current_app
+            # 注意：current_app 已在模块顶部导入，这里不能再 import，
+            # 否则会把 current_app 变成函数内局部变量，POST 分支会 UnboundLocalError
             return platform_instance.handle_verification(request)
         except Exception as e:
             logger.error(f"平台回调验证失败: {platform} - {e}")
@@ -76,12 +77,14 @@ def platform_callback(platform: str):
         return "invalid request", 403
 
     # 异步处理消息（先返回200，再慢慢处理）
-    # 注意：子线程不继承主线程的 ContextVar，不能直接使用 current_app 代理。
-    # 必须在主线程中捕获真实 app 对象并传入子线程。
+    # 注意：子线程不继承主线程的 ContextVar，不能直接使用 current_app / request 代理。
+    # 必须在主线程中捕获真实 app 对象和真实 request 对象并传入子线程，
+    # 否则子线程访问 request.args 会抛 "Working outside of request context"。
     app = current_app._get_current_object()
+    real_request = request._get_current_object()
     thread = Thread(
         target=_handle_platform_message,
-        args=(app, platform_instance, request, platform_instance._config_id),
+        args=(app, platform_instance, real_request, platform_instance._config_id),
     )
     thread.daemon = True
     thread.start()
