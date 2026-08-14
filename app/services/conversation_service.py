@@ -38,13 +38,20 @@ def process_unified_message(message: UnifiedMessage):
     """
     pending_reply = None  # 待发送的回复（commit成功后执行）
     try:
+        # Bug 3 修复：先检查是否转人工，再决定如何处理消息
+        # 原代码先 _get_or_create_conversation 再检查 is_handed_over，
+        # 导致转人工状态下的消息走了 AI 分支。
+        is_handed = HandoffService.is_handed_over(message.user_id)
+
         conversation = _get_or_create_conversation(
             user_id=message.user_id, user_name=message.user_name,
             group_id=message.group_id, group_name=message.group_name,
             platform=message.platform,
             platform_config_id=message.platform_config_id,
         )
-        if HandoffService.is_handed_over(message.user_id):
+
+        if is_handed:
+            # 转人工状态：只更新活跃时间 + 存消息，不走 AI
             HandoffService.update_last_active(message.user_id)
             _save_message(conversation.id, "user", message.content, message.msg_type, message.platform, message.image_path)
         else:
@@ -55,6 +62,8 @@ def process_unified_message(message: UnifiedMessage):
         db.session.commit()
 
         # commit 成功后发送回复（外部位幂等操作，失败不影响数据库一致性）
+        # Bug 2 修复：pending_reply 现在在转人工时也会返回（不再是 None），
+        # 让转人工话术能发送给用户
         if pending_reply is not None:
             _send_reply(pending_reply)
 
@@ -64,12 +73,27 @@ def process_unified_message(message: UnifiedMessage):
 
 
 def _get_or_create_conversation(user_id: str, user_name: str, group_id: str | None, group_name: str | None, platform: str, platform_config_id: int | None = None) -> Conversation:
-    """查找或创建对话记录"""
+    """查找或创建对话记录
+
+    Bug 4 修复：原代码只查 status="active" 的会话，
+    当会话因转人工变成 transferred 后，下次用户发消息会找不到 → 创建新会话。
+    现在按优先级查找：active > transferred，找到就复用，避免同一用户累积多条会话。
+    """
     try:
         if group_id:
+            # 群聊：按 group_id + user_id 查
             conv = Conversation.query.filter_by(group_id=group_id, user_id=user_id, status="active").first()
+            if not conv:
+                conv = Conversation.query.filter_by(group_id=group_id, user_id=user_id, status="transferred").first()
+                if conv:
+                    conv.status = "active"  # 转人工后用户再发消息，恢复为 active
         else:
+            # 私聊：按 user_id 查
             conv = Conversation.query.filter_by(user_id=user_id, status="active").first()
+            if not conv:
+                conv = Conversation.query.filter_by(user_id=user_id, status="transferred").first()
+                if conv:
+                    conv.status = "active"  # 转人工后用户再发消息，恢复为 active
         if conv:
             if user_name:
                 conv.user_name = user_name
@@ -115,7 +139,14 @@ def _handle_ai_response(conversation: Conversation, message: UnifiedMessage) -> 
             _save_message(conversation.id, "assistant", reply, "text", message.platform)
             HandoffService.take_over(message.user_id, is_auto=True)
             conversation.status = "transferred"
-            return None  # 转人工，不自动回复
+            # Bug 2 修复：返回 reply 让外层发送给用户
+            # 原代码 return None 导致用户收不到"我需要转给人工客服处理"的回复
+            return UnifiedReply(
+                platform=message.platform,
+                user_id=message.user_id,
+                group_id=message.group_id,
+                content=reply,
+            )
         else:
             # 自动回复：保存回复并返回统一回复模型，由外层 commit 成功后发送
             _save_message(conversation.id, "assistant", reply, "text", message.platform)
@@ -176,6 +207,10 @@ def _build_enhanced_query(current_input: str, history: list[dict]) -> str:
             user_count += 1
             if user_count == 2:
                 context = msg["content"][:50]
+                # Bug 10 修复：context 为空时拼出来是 " | xxx"（带前导空管道符），
+                # 会污染检索语义。空 context 时直接用原输入。
+                if not context.strip():
+                    return current_input
                 logger.debug(f"增强检索: '{current_input}' → '{context} | {current_input}'")
                 return f"{context} | {current_input}"
 

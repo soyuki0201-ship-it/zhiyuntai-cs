@@ -90,6 +90,11 @@ def init_vector_store(persist_dir: str, model_name: str = "BAAI/bge-small-zh"):
         path=persist_dir,
         settings=Settings(anonymized_telemetry=False),
     )
+    # Bug 15 修复：ChromaDB 的 posthog 遥测跟新版本不兼容会刷错误日志。
+    # anonymized_telemetry=False 不够，要强制设环境变量 + 用空 telemetry client。
+    import os as _os
+    _os.environ["CHROMA_TELEMETRY_IMPL"] = "none"
+    _os.environ["ANONYMIZED_TELEMETRY"] = "False"
 
     # 创建或获取集合
     _vector_collection = client.get_or_create_collection(

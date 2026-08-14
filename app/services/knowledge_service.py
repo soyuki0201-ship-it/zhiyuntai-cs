@@ -17,6 +17,9 @@ class KnowledgeService:
     def add(title: str, content: str, source: str = "manual", tags: str = None, category: str = None) -> int:
         """新增知识（同时存入 MySQL 和 ChromaDB）
 
+        Bug 14 修复：MySQL 是 source of truth，ChromaDB 写入失败时记录警告但不回滚 MySQL
+        （启动时会从 MySQL 重建向量库兜底）。原代码无任何错误处理，ChromaDB 失败会静默丢数据。
+
         Returns:
             int: 知识 ID
         """
@@ -35,6 +38,8 @@ class KnowledgeService:
         chunks = _chunk_text(content)
 
         # 3. 向量化后存入 ChromaDB
+        # Bug 14：写入失败时记录详细错误，但不回滚 MySQL（启动重建兜底）
+        failed_chunks = 0
         for i, chunk in enumerate(chunks):
             chunk_id = f"{knowledge.id}_{i}"
             metadata = {
@@ -44,9 +49,22 @@ class KnowledgeService:
                 "category": category or "",
                 "chunk_index": i,
             }
-            add_knowledge(chunk_id, chunk, metadata)
+            try:
+                add_knowledge(chunk_id, chunk, metadata)
+            except Exception as e:
+                failed_chunks += 1
+                logger.error(
+                    f"知识 {knowledge.id} 第 {i} 个切片写入向量库失败: {e}",
+                    exc_info=True,
+                )
 
-        logger.info(f"知识已添加: id={knowledge.id}, title={title}, chunks={len(chunks)}")
+        if failed_chunks:
+            logger.warning(
+                f"知识 {knowledge.id}({title}) 有 {failed_chunks}/{len(chunks)} 个切片写入失败，"
+                f"将在下次启动时从 MySQL 重建"
+            )
+        else:
+            logger.info(f"知识已添加: id={knowledge.id}, title={title}, chunks={len(chunks)}")
         return knowledge.id
 
     @staticmethod

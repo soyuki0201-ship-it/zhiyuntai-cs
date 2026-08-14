@@ -50,12 +50,20 @@ class HandoffService:
 
     @staticmethod
     def release(user_id: str) -> bool:
-        """释放用户接管（注意：外层调用方统一 commit）"""
+        """释放用户接管（注意：外层调用方统一 commit）
+
+        Bug 11 修复：释放时同时把 Conversation.status 从 transferred 恢复为 active，
+        否则下次用户发消息会创建新会话（重复会话 Bug）。
+        """
         handoff = Handoff.query.filter_by(user_id=user_id, status="active").first()
         if not handoff:
             return False
         handoff.status = "resolved"
         handoff.resolved_at = datetime.utcnow()
+        # 恢复会话状态为 active，让 AI 能正常回复
+        conv = Conversation.query.filter_by(id=handoff.conversation_id).first()
+        if conv and conv.status == "transferred":
+            conv.status = "active"
         return True
 
     @staticmethod
@@ -78,6 +86,10 @@ class HandoffService:
         for handoff in expired:
             handoff.status = "resolved"
             handoff.resolved_at = datetime.utcnow()
+            # 同步恢复会话状态（与 release 一致）
+            conv = Conversation.query.filter_by(id=handoff.conversation_id).first()
+            if conv and conv.status == "transferred":
+                conv.status = "active"
         if expired:
             db.session.commit()
         return len(expired)

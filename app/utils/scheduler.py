@@ -44,7 +44,12 @@ def init_scheduler(app):
 
 
 def _cleanup_expired_conversations():
-    """清理过期对话（从 AIConfig 表读取保留天数）"""
+    """清理过期对话（从 AIConfig 表读取保留天数）
+
+    Bug 13 修复：原代码不限 status，会把持续对话超 30 天的活跃客户也删掉。
+    现在只清理 status=closed 的对话；active/transferred 状态保留。
+    另外用批量 DELETE 替代逐条删除，减少大事务持锁。
+    """
     from datetime import datetime, timedelta
     from app.models.models import db, Conversation, Message, Handoff, AIConfig
 
@@ -52,19 +57,21 @@ def _cleanup_expired_conversations():
     ttl_days = cfg.conversation_ttl_days if cfg else 30
     cutoff = datetime.utcnow() - timedelta(days=ttl_days)
 
-    # 查找超保留天数无更新的对话（不限状态）
+    # Bug 13 修复：只清理已关闭且超保留期的对话，不删 active/transferred
     expired = Conversation.query.filter(
         Conversation.updated_at < cutoff,
+        Conversation.status == "closed",
     ).all()
 
-    for conv in expired:
-        # 删除关联消息
-        Message.query.filter_by(conversation_id=conv.id).delete()
-        # 删除关联接管记录
-        Handoff.query.filter_by(conversation_id=conv.id).delete()
-        # 删除对话本身
-        db.session.delete(conv)
+    if not expired:
+        return
 
-    if expired:
-        db.session.commit()
-        logger.info(f"数据清理：已清理 {len(expired)} 条过期对话（保留{ttl_days}天）")
+    expired_ids = [c.id for c in expired]
+
+    # 批量删除关联数据
+    Message.query.filter(Message.conversation_id.in_(expired_ids)).delete(synchronize_session=False)
+    Handoff.query.filter(Handoff.conversation_id.in_(expired_ids)).delete(synchronize_session=False)
+    Conversation.query.filter(Conversation.id.in_(expired_ids)).delete(synchronize_session=False)
+
+    db.session.commit()
+    logger.info(f"数据清理：已清理 {len(expired_ids)} 条已关闭的过期对话（保留{ttl_days}天）")

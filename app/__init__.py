@@ -64,17 +64,90 @@ def create_app(config_class=Config):
     # Embedding model (deploy-time, can fail gracefully)
     with app.app_context():
         try:
-            from app.utils.vector_store import init_vector_store
+            from app.utils.vector_store import init_vector_store, get_vector_collection
             init_vector_store(
                 persist_dir=app.config["CHROMA_PERSIST_DIR"],
                 model_name=app.config["EMBEDDING_MODEL_NAME"],
             )
             app.logger.info("Embedding 模型加载成功")
+            # 启动时从 MySQL 重建向量库（防止 pod 重启/持久化丢失导致向量库空）
+            _rebuild_vector_store_if_needed(app)
         except Exception as e:
             app.logger.error(f"Embedding 模型加载失败，RAG 知识库检索不可用: {e}")
             app.logger.error("请确认：1) 网络能访问 HuggingFace  2) 磁盘空间充足  3) sentence-transformers 已安装")
 
     return app
+
+
+def _rebuild_vector_store_if_needed(app):
+    """启动时检查向量库是否完整，缺失则从 MySQL 重建。
+
+    场景：K8s pod 重启未挂持久卷、或之前写入失败，导致 ChromaDB 为空但 MySQL 有知识。
+    策略：对比向量库 chunk 数和 MySQL 知识数，向量库明显偏少则全量重建。
+    幂等：重建时先清空再重写，可安全重复执行。
+    """
+    try:
+        from app.models.models import Knowledge
+        from app.services.knowledge_service import _chunk_text
+        from app.utils.vector_store import (
+            get_vector_collection,
+            add_knowledge,
+            delete_knowledge_chunks,
+        )
+
+        collection = get_vector_collection()
+        if collection is None:
+            app.logger.warning("向量库未初始化，跳过重建检查")
+            return
+
+        vector_count = collection.count()
+        knowledge_count = Knowledge.query.count()
+
+        # 向量库 chunk 数 >= 知识数说明数据基本完整（一条知识至少 1 个 chunk）
+        if vector_count >= knowledge_count and knowledge_count > 0:
+            app.logger.info(
+                f"向量库检查通过：{vector_count} chunks / {knowledge_count} 条知识"
+            )
+            return
+
+        if knowledge_count == 0:
+            app.logger.info("MySQL 无知识数据，跳过向量库重建")
+            return
+
+        # 需要重建
+        app.logger.warning(
+            f"向量库不完整：{vector_count} chunks vs {knowledge_count} 条知识，开始重建..."
+        )
+        rebuilt = 0
+        for knowledge in Knowledge.query.all():
+            try:
+                # 先删除该知识的旧切片（幂等）
+                delete_knowledge_chunks(knowledge.id)
+                # 重新切片并写入
+                chunks = _chunk_text(knowledge.content)
+                for i, chunk in enumerate(chunks):
+                    chunk_id = f"{knowledge.id}_{i}"
+                    metadata = {
+                        "title": knowledge.title,
+                        "source": knowledge.source or "",
+                        "tags": knowledge.tags or "",
+                        "category": knowledge.category or "",
+                        "chunk_index": i,
+                    }
+                    add_knowledge(chunk_id, chunk, metadata)
+                rebuilt += 1
+            except Exception as e:
+                app.logger.error(
+                    f"重建知识 {knowledge.id}({knowledge.title}) 失败: {e}"
+                )
+
+        new_count = collection.count()
+        app.logger.info(
+            f"向量库重建完成：{rebuilt}/{knowledge_count} 条知识，"
+            f"{vector_count} → {new_count} chunks"
+        )
+    except Exception as e:
+        app.logger.error(f"向量库重建检查异常: {e}", exc_info=True)
 
 
 def _register_admin_context_processors(app, blueprints):

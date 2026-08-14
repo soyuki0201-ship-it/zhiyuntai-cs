@@ -70,7 +70,11 @@ def dashboard():
     """工作台首页"""
     from datetime import datetime, timedelta
     today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-    today_count = Message.query.filter(Message.created_at >= today_start).count()
+    # Bug 9 修复：统计语义更正
+    # - today_count: 用户咨询数（只数 role=user 的消息，原代码数所有 Message 导致虚高）
+    # - ai_count: AI 回复数（role=assistant 的消息）
+    # - handoff_count: 今日转人工次数（只数今日新建的 active+resolved 记录，过滤 is_auto）
+    today_count = Message.query.filter(Message.created_at >= today_start, Message.role == "user").count()
     ai_count = Message.query.filter(Message.created_at >= today_start, Message.role == "assistant").count()
     handoff_count = Handoff.query.filter(Handoff.taken_at >= today_start).count()
     return render_template("admin/dashboard.html",
@@ -191,7 +195,16 @@ def pending_list():
         last_msg_map_pending = {m.conversation_id: m for m in last_msgs}
 
     for conv in pagination.items:
-        if HandoffService.is_handed_over(conv.user_id):
+        # Bug 7 修复：原逻辑是 is_handed_over=True 时 continue（跳过），
+        # 导致真正等待接管的客户被隐藏，释放后的反而显示。逻辑写反了。
+        # 正确逻辑：显示 status=transferred 且尚未被运营接管的会话（is_auto=True 的 AI 自动转人工）
+        # is_handed_over=False 说明 AI 触发了转人工（Handoff 已 resolved 或 take_over 未成功），
+        # 但 Conversation.status 仍是 transferred → 需要运营处理
+        # is_handed_over=True 且 is_auto=True → AI 转人工，等待运营接管（显示在待处理）
+        # is_handed_over=True 且 is_auto=False → 运营已接管（显示在处理中，不显示在待处理）
+        handoff = Handoff.query.filter_by(user_id=conv.user_id, status="active").first()
+        if handoff and handoff.is_auto == False:
+            # 运营已接管，不显示在待处理
             continue
         last_msg = last_msg_map_pending.get(conv.id)
         conv_list.append({
